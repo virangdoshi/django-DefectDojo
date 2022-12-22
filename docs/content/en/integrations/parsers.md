@@ -533,6 +533,10 @@ Example:
 }
 ```
 
+### Ggshield
+
+Import [Ggshield](https://github.com/GitGuardian/ggshield) findings in JSON format.
+
 ### Gosec Scanner
 
 Import Gosec Scanner findings in JSON format.
@@ -551,7 +555,7 @@ Import Dependency Scanning Report vulnerabilities in JSON format: https://docs.g
 
 ### Github Vulnerability
 
-Import findings from Github vulnerability scan:
+Import findings from Github vulnerability scan (GraphQL Query):
 <https://help.github.com/en/github/managing-security-vulnerabilities>
 
 Currently the parser is able to manage only `RepositoryVulnerabilityAlert` object.
@@ -563,6 +567,7 @@ vulnerabilityAlerts (RepositoryVulnerabilityAlert object)
     + id
     + createdAt (optional)
     + vulnerableManifestPath (optional)
+    + state (optional)
     + securityVulnerability (SecurityVulnerability object)
         + severity (CRITICAL/HIGH/LOW/MODERATE)
         + package (optional)
@@ -576,7 +581,9 @@ vulnerabilityAlerts (RepositoryVulnerabilityAlert object)
                 + references (optional)
                     + url (optional)
                 + cvss (optional)
+                    + score (optional)
                     + vectorString (optional)
+                + cwes (optional)
 ```
 
 References:
@@ -1034,6 +1041,10 @@ report as follows
 -   Removing both fields will allow retrieval of all findings in the
     Risk Recon instance.
 
+### Rubocop Scan
+
+Import Rubocop JSON scan report (with option -f json).
+
 ### Rusty Hog parser
 
 From: <https://github.com/newrelic/rusty-hog> Import the JSON output.
@@ -1069,6 +1080,10 @@ It's possible to activate de-duplication based on this data by customizing setti
 # in your settings.py file
 DEDUPLICATION_ALGORITHM_PER_PARSER["SARIF"] = DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL_OR_HASH_CODE
 ```
+
+### Scantist Scan
+Scantist is an open source management platform. Scan and remediate open source security, licensing and compliance risks across your software development lifecycle.
+Here you can find more information: <https://scantist.com/>
 
 ### ScoutSuite
 
@@ -1237,6 +1252,22 @@ Detailed XML Report
 
 Import Project CSV or JSON report
 
+### Vulners
+
+Import Vulners [Audit](https://vulners.com/docs/API_wrapper/linux_audit/#linux-audit) results, no file required.
+
+Follow these steps to set up importing:
+1. Configure the Vulners API Key details by navigating to Configuration / Tool Configuration, selecting the Tool Type to "Vulners", and adding the API Key
+2. In the Product settings select "Add API Scan Configuration" and select the previously added Vulners API Tool Configuration.
+3. After this is done, you can import the findings by selecting "Vulners" as the scan type.
+
+Detailed installation steps can be found in [vulners documentation](https://vulners.com/docs/plugins/defectdojo/).
+
+Use following [instructions](https://vulners.com/docs/apikey/) to generate Vulners API Key.
+
+More details about DefectDojo-plugin integration can be found at [vulners integrations page](https://vulners.com/plugins).
+
+
 ### Wapiti Scan
 
 Import XML report.
@@ -1280,4 +1311,4 @@ Import Yarn Audit scan report in JSON format. Use something like `yarn audit --j
 
 ### Zed Attack Proxy
 
-ZAP XML report format.
+ZAP XML report format (with or without requests and responses).

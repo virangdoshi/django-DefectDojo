@@ -212,10 +212,9 @@ def prefetch_for_findings(findings):
                                                                             queryset=Test_Import_Finding_Action.objects.exclude(action=IMPORT_UNTOUCHED_FINDING)))
 
         prefetched_findings = prefetched_findings.prefetch_related('endpoints')
-        prefetched_findings = prefetched_findings.prefetch_related('endpoint_status')
-        prefetched_findings = prefetched_findings.prefetch_related('endpoint_status__endpoint')
-        prefetched_findings = prefetched_findings.annotate(active_endpoint_count=Count('endpoint_status__id', filter=Q(endpoint_status__mitigated=False)))
-        prefetched_findings = prefetched_findings.annotate(mitigated_endpoint_count=Count('endpoint_status__id', filter=Q(endpoint_status__mitigated=True)))
+        prefetched_findings = prefetched_findings.prefetch_related('status_finding')
+        prefetched_findings = prefetched_findings.annotate(active_endpoint_count=Count('status_finding__id', filter=Q(status_finding__mitigated=False)))
+        prefetched_findings = prefetched_findings.annotate(mitigated_endpoint_count=Count('status_finding__id', filter=Q(status_finding__mitigated=True)))
         prefetched_findings = prefetched_findings.prefetch_related('finding_group_set__jira_issue')
         prefetched_findings = prefetched_findings.prefetch_related('duplicate_finding')
         prefetched_findings = prefetched_findings.prefetch_related('vulnerability_id_set')
@@ -574,7 +573,10 @@ def add_temp_finding(request, tid, fid):
             new_finding.reporter = request.user
             new_finding.numerical_severity = Finding.get_numerical_severity(
                 new_finding.severity)
+
+            new_finding.tags = form.cleaned_data['tags']
             new_finding.date = form.cleaned_data['date'] or datetime.today()
+
             finding_helper.update_finding_status(new_finding, request.user)
 
             new_finding.save(dedupe_option=False, false_history=False)
@@ -694,6 +696,7 @@ def re_import_scan_results(request, tid):
             minimum_severity = form.cleaned_data['minimum_severity']
             scan = request.FILES.get('file', None)
             active = form.cleaned_data['active']
+            do_not_reactivate = form.cleaned_data['do_not_reactivate']
             verified = form.cleaned_data['verified']
             tags = form.cleaned_data['tags']
             version = form.cleaned_data.get('version', None)
@@ -708,6 +711,7 @@ def re_import_scan_results(request, tid):
             close_old_findings = form.cleaned_data.get('close_old_findings', True)
 
             group_by = form.cleaned_data.get('group_by', None)
+            create_finding_groups_for_all_findings = form.cleaned_data.get('create_finding_groups_for_all_findings')
 
             # Tags are replaced, same behaviour as with django-tagging
             test.tags = tags
@@ -731,7 +735,8 @@ def re_import_scan_results(request, tid):
                                                 version=version, branch_tag=branch_tag, build_id=build_id,
                                                 commit_hash=commit_hash, push_to_jira=push_to_jira,
                                                 close_old_findings=close_old_findings, group_by=group_by,
-                                                api_scan_configuration=api_scan_configuration, service=service)
+                                                api_scan_configuration=api_scan_configuration, service=service, do_not_reactivate=do_not_reactivate,
+                                                create_finding_groups_for_all_findings=create_finding_groups_for_all_findings)
             except Exception as e:
                 logger.exception(e)
                 add_error_message_to_response('An exception error occurred during the report import:%s' % str(e))

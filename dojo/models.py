@@ -395,6 +395,24 @@ class System_Settings(models.Model):
         verbose_name=_("Enable Finding SLA's"),
         help_text=_("Enables Finding SLA's for time to remediate."))
 
+    enable_notify_sla_active = models.BooleanField(
+        default=False,
+        blank=False,
+        verbose_name=_("Enable Notifiy SLA's Breach for active Findings"),
+        help_text=_("Enables Notify when time to remediate according to Finding SLA's is breached for active Findings."))
+
+    enable_notify_sla_active_verified = models.BooleanField(
+        default=False,
+        blank=False,
+        verbose_name=_("Enable Notifiy SLA's Breach for active, verified Findings"),
+        help_text=_("Enables Notify when time to remediate according to Finding SLA's is breached for active, verified Findings."))
+
+    enable_notify_sla_jira_only = models.BooleanField(
+        default=False,
+        blank=False,
+        verbose_name=_("Enable Notifiy SLA's Breach for Findings linked to JIRA"),
+        help_text=_("Enables Notify when time to remediate according to Finding SLA's is breached for Findings that are linked to JIRA issues."))
+
     allow_anonymous_survey_repsonse = models.BooleanField(
         default=False,
         blank=False,
@@ -478,6 +496,34 @@ class System_Settings(models.Model):
         default='',
         blank=True,
         help_text=_("New users will only be assigned to the default group, when their email address matches this regex pattern. This is optional condition."))
+    minimum_password_length = models.IntegerField(
+        default=9,
+        verbose_name=_('Minimum password length'),
+        help_text=_("Requires user to set passwords greater than minimum length."))
+    maximum_password_length = models.IntegerField(
+        default=48,
+        verbose_name=_('Maximum password length'),
+        help_text=_("Requires user to set passwords less than maximum length."))
+    number_character_required = models.BooleanField(
+        default=True,
+        blank=False,
+        verbose_name=_("Password must contain one digit"),
+        help_text=_("Requires user passwords to contain at least one digit (0-9)."))
+    special_character_required = models.BooleanField(
+        default=True,
+        blank=False,
+        verbose_name=_("Password must contain one special character"),
+        help_text=_("Requires user passwords to contain at least one special character (()[]{}|\`~!@#$%^&*_-+=;:\'\",<>./?)."))  # noqa W605
+    lowercase_character_required = models.BooleanField(
+        default=True,
+        blank=False,
+        verbose_name=_("Password must contain one lowercase letter"),
+        help_text=_("Requires user passwords to contain at least one lowercase letter (a-z)."))
+    uppercase_character_required = models.BooleanField(
+        default=True,
+        blank=False,
+        verbose_name=_("Password must contain one uppercase letter"),
+        help_text=_("Requires user passwords to contain at least one uppercase letter (A-Z)."))
 
     from dojo.middleware import System_Settings_Manager
     objects = System_Settings_Manager()
@@ -574,7 +620,7 @@ class Notes(models.Model):
     def copy(self):
         copy = self
         # Save the necessary ManyToMany relationships
-        old_history = self.history.all()
+        old_history = list(self.history.all())
         # Wipe the IDs of the new object
         copy.pk = None
         copy.id = None
@@ -1266,11 +1312,11 @@ class Engagement(models.Model):
     def copy(self):
         copy = self
         # Save the necessary ManyToMany relationships
-        old_notes = self.notes.all()
-        old_files = self.files.all()
-        old_tags = self.tags.all()
-        old_risk_acceptances = self.risk_acceptance.all()
-        old_tests = Test.objects.filter(engagement=self)
+        old_notes = list(self.notes.all())
+        old_files = list(self.files.all())
+        old_tags = list(self.tags.all())
+        old_risk_acceptances = list(self.risk_acceptance.all())
+        old_tests = list(Test.objects.filter(engagement=self))
         # Wipe the IDs of the new object
         copy.pk = None
         copy.id = None
@@ -1343,7 +1389,7 @@ class Endpoint_Params(models.Model):
 
 
 class Endpoint_Status(models.Model):
-    date = models.DateTimeField(default=get_current_date)
+    date = models.DateField(default=get_current_date)
     last_modified = models.DateTimeField(null=True, editable=False, default=get_current_datetime)
     mitigated = models.BooleanField(default=False, blank=True)
     mitigated_time = models.DateTimeField(editable=False, null=True, blank=True)
@@ -1365,10 +1411,7 @@ class Endpoint_Status(models.Model):
         return days if days > 0 else 0
 
     def __str__(self):
-        field_values = []
-        for field in self._meta.get_fields():
-            field_values.append(str(getattr(self, field.name, '')))
-        return ' '.join(field_values)
+        return "'{}' on '{}'".format(str(self.finding), str(self.endpoint))
 
     def copy(self, finding=None):
         copy = self
@@ -1413,7 +1456,10 @@ class Endpoint(models.Model):
                                           "be omitted. For example 'section-13', 'paragraph-2'."))
     product = models.ForeignKey(Product, null=True, blank=True, on_delete=models.CASCADE)
     endpoint_params = models.ManyToManyField(Endpoint_Params, blank=True, editable=False)
-    endpoint_status = models.ManyToManyField(Endpoint_Status, blank=True, related_name='endpoint_endpoint_status')
+    findings = models.ManyToManyField("Finding",
+                                      blank=True,
+                                      verbose_name=_('Findings'),
+                                      through=Endpoint_Status)
 
     tags = TagField(blank=True, force_lowercase=True, help_text=_("Add tags that help describe this endpoint. Choose from the list or add new tags. Press Enter key to add."))
 
@@ -1572,27 +1618,29 @@ class Endpoint(models.Model):
 
     @property
     def mitigated(self):
-        return not self.vulnerable()
+        return not self.vulnerable
 
+    @property
     def vulnerable(self):
-        return self.active_findings_count() > 0
+        return self.active_findings_count > 0
 
-    def findings(self):
-        return Finding.objects.filter(endpoints=self).distinct()
-
+    @property
     def findings_count(self):
-        return self.findings().count()
+        return self.findings.all().count()
 
     def active_findings(self):
-        findings = self.findings().filter(active=True,
-                                      verified=True,
+        findings = self.findings.filter(active=True,
                                       out_of_scope=False,
                                       mitigated__isnull=True,
                                       false_p=False,
-                                      duplicate=False).order_by('numerical_severity')
-        findings = findings.filter(endpoint_status__mitigated=False)
+                                      duplicate=False,
+                                      status_finding__mitigated=False,
+                                      status_finding__false_positive=False,
+                                      status_finding__out_of_scope=False,
+                                      status_finding__risk_accepted=False).order_by('numerical_severity')
         return findings
 
+    @property
     def active_findings_count(self):
         return self.active_findings().count()
 
@@ -1600,32 +1648,48 @@ class Endpoint(models.Model):
         return Endpoint.objects.filter(host=self.host,
                                        product=self.product).distinct()
 
+    @property
     def host_endpoints_count(self):
         return self.host_endpoints().count()
 
     def host_mitigated_endpoints(self):
-        meps = Endpoint_Status.objects.filter(endpoint__in=self.host_endpoints(), mitigated=True)
-        return Endpoint.objects.filter(endpoint_status__in=meps).distinct()
+        meps = Endpoint_Status.objects \
+                  .filter(endpoint__in=self.host_endpoints()) \
+                  .filter(Q(mitigated=True) |
+                          Q(false_positive=True) |
+                          Q(out_of_scope=True) |
+                          Q(risk_accepted=True) |
+                          Q(finding__out_of_scope=True) |
+                          Q(finding__mitigated__isnull=False) |
+                          Q(finding__false_p=True) |
+                          Q(finding__duplicate=True))
+        return Endpoint.objects.filter(status_endpoint__in=meps).distinct()
 
+    @property
     def host_mitigated_endpoints_count(self):
         return self.host_mitigated_endpoints().count()
 
     def host_findings(self):
         return Finding.objects.filter(endpoints__in=self.host_endpoints()).distinct()
 
+    @property
     def host_findings_count(self):
-        return self.host_finding().count()
+        return self.host_findings().count()
 
     def host_active_findings(self):
-        findings = self.host_findings().filter(active=True,
-                                           verified=True,
-                                           out_of_scope=False,
-                                           mitigated__isnull=True,
-                                           false_p=False,
-                                           duplicate=False).order_by('numerical_severity')
-        findings = findings.filter(endpoint_status__mitigated=False)
+        findings = Finding.objects.filter(active=True,
+                                        out_of_scope=False,
+                                        mitigated__isnull=True,
+                                        false_p=False,
+                                        duplicate=False,
+                                        status_finding__mitigated=False,
+                                        status_finding__false_positive=False,
+                                        status_finding__out_of_scope=False,
+                                        status_finding__risk_accepted=False,
+                                        endpoints__in=self.host_endpoints()).order_by('numerical_severity')
         return findings
 
+    @property
     def host_active_findings_count(self):
         return self.host_active_findings().count()
 
@@ -1760,10 +1824,10 @@ class Test(models.Model):
     def copy(self, engagement=None):
         copy = self
         # Save the necessary ManyToMany relationships
-        old_notes = self.notes.all()
-        old_files = self.files.all()
-        old_tags = self.tags.all()
-        old_findings = Finding.objects.filter(test=self)
+        old_notes = list(self.notes.all())
+        old_files = list(self.files.all())
+        old_tags = list(self.tags.all())
+        old_findings = list(Finding.objects.filter(test=self))
         # Wipe the IDs of the new object
         copy.pk = None
         copy.id = None
@@ -1983,12 +2047,8 @@ class Finding(models.Model):
     endpoints = models.ManyToManyField(Endpoint,
                                        blank=True,
                                        verbose_name=_('Endpoints'),
-                                       help_text=_("The hosts within the product that are susceptible to this flaw."))
-    endpoint_status = models.ManyToManyField(Endpoint_Status,
-                                             blank=True,
-                                             related_name="finding_endpoint_status",
-                                             verbose_name=_('Endpoint Status'),
-                                             help_text=_('The status of the endpoint associated with this flaw (Vulnerable, Mitigated, ...).'))
+                                       help_text=_("The hosts within the product that are susceptible to this flaw. + The status of the endpoint associated with this flaw (Vulnerable, Mitigated, ...)."),
+                                       through=Endpoint_Status)
     references = models.TextField(null=True,
                                   blank=True,
                                   db_column="refs",
@@ -2275,13 +2335,12 @@ class Finding(models.Model):
     def copy(self, test=None):
         copy = self
         # Save the necessary ManyToMany relationships
-        old_notes = self.notes.all()
-        old_files = self.files.all()
-        old_endpoint_status = self.endpoint_status.all()
-        old_endpoints = self.endpoints.all()
-        old_reviewers = self.reviewers.all()
-        old_found_by = self.found_by.all()
-        old_tags = self.tags.all()
+        old_notes = list(self.notes.all())
+        old_files = list(self.files.all())
+        old_status_findings = list(self.status_finding.all())
+        old_reviewers = list(self.reviewers.all())
+        old_found_by = list(self.found_by.all())
+        old_tags = list(self.tags.all())
         # Wipe the IDs of the new object
         copy.pk = None
         copy.id = None
@@ -2296,10 +2355,8 @@ class Finding(models.Model):
         for files in old_files:
             copy.files.add(files.copy())
         # Copy the endpoint_status
-        for endpoint_status in old_endpoint_status:
-            copy.endpoint_status.add(endpoint_status.copy(finding=copy))
-        # Assign any endpoints
-        copy.endpoints.set(old_endpoints)
+        for endpoint_status in old_status_findings:
+            endpoint_status.copy(finding=copy)  # adding or setting is not necessary, link is created by Endpoint_Status.copy()
         # Assign any reviewers
         copy.reviewers.set(old_reviewers)
         # Assign any found_by
@@ -2804,14 +2861,16 @@ class Finding(models.Model):
             return escape(self.file_path)
         link = self.test.engagement.source_code_management_uri
         if "https://github.com/" in self.test.engagement.source_code_management_uri:
-            if self.test.commit_hash is not None:
+            if self.test.commit_hash:
                 link += '/blob/' + self.test.commit_hash + '/' + self.file_path
-            elif self.test.engagement.commit_hash is not None:
+            elif self.test.engagement.commit_hash:
                 link += '/blob/' + self.test.engagement.commit_hash + '/' + self.file_path
-            elif self.test.branch_tag is not None:
+            elif self.test.branch_tag:
                 link += '/blob/' + self.test.branch_tag + '/' + self.file_path
-            elif self.test.engagement.branch_tag is not None:
+            elif self.test.engagement.branch_tag:
                 link += '/blob/' + self.test.engagement.branch_tag + '/' + self.file_path
+            else:
+                link += '/' + self.file_path
         else:
             link += '/' + self.file_path
         if self.line:
@@ -2864,12 +2923,7 @@ class FindingAdmin(admin.ModelAdmin):
     # IDs rather than multi-select
     raw_id_fields = (
         'endpoints',
-        'endpoint_status',
     )
-
-
-Finding.endpoints.through.__str__ = lambda \
-    x: "Endpoint: " + str(x.endpoint)
 
 
 class Vulnerability_Id(models.Model):
@@ -3139,7 +3193,7 @@ class Risk_Acceptance(models.Model):
         (TREATMENT_TRANSFER, 'Transfer (The risk is transferred to a 3rd party)'),
     ]
 
-    name = models.CharField(max_length=100, null=False, blank=False, help_text=_("Descriptive name which in the future may also be used to group risk acceptances together across engagements and products"))
+    name = models.CharField(max_length=300, null=False, blank=False, help_text=_("Descriptive name which in the future may also be used to group risk acceptances together across engagements and products"))
 
     accepted_findings = models.ManyToManyField(Finding)
 
@@ -3204,7 +3258,7 @@ class Risk_Acceptance(models.Model):
     def copy(self, engagement=None):
         copy = self
         # Save the necessary ManyToMany relationships
-        old_notes = self.notes.all()
+        old_notes = list(self.notes.all())
         old_accepted_findings_hash_codes = [finding.hash_code for finding in self.accepted_findings.all()]
         # Wipe the IDs of the new object
         copy.pk = None
@@ -3392,6 +3446,8 @@ class JIRA_Project(models.Model):
     component = models.CharField(max_length=200, blank=True)
     custom_fields = models.JSONField(max_length=200, blank=True, null=True,
                                    help_text=_("JIRA custom field JSON mapping of Id to value, e.g. {\"customfield_10122\": [{\"name\": \"8.0.1\"}]}"))
+    default_assignee = models.CharField(max_length=200, blank=True, null=True,
+                                     help_text=_("JIRA default assignee (name). If left blank then it defaults to whatever is configured in JIRA."))
     jira_labels = models.CharField(max_length=200, blank=True, null=True,
                                    help_text=_('JIRA issue labels space seperated'))
     add_vulnerability_id_to_jira_label = models.BooleanField(default=False,
