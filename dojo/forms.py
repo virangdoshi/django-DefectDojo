@@ -17,19 +17,20 @@ from django.forms.widgets import Widget, Select
 from django.utils.dates import MONTHS
 from django.utils.safestring import mark_safe
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 import tagulous
 
 from dojo.endpoint.utils import endpoint_get_or_create, endpoint_filter, \
     validate_endpoints_to_add
-from dojo.models import Finding, Finding_Group, Product_Type, Product, Note_Type, \
+from dojo.models import Announcement, Finding, Finding_Group, Product_Type, Product, Note_Type, \
     Check_List, SLA_Configuration, User, Engagement, Test, Test_Type, Notes, Risk_Acceptance, \
     Development_Environment, Dojo_User, Endpoint, Stub_Finding, Finding_Template, \
     JIRA_Issue, JIRA_Project, JIRA_Instance, GITHUB_Issue, GITHUB_PKey, GITHUB_Conf, UserContactInfo, Tool_Type, \
     Tool_Configuration, Tool_Product_Settings, Cred_User, Cred_Mapping, System_Settings, Notifications, \
     App_Analysis, Objects_Product, Benchmark_Product, Benchmark_Requirement, \
-    Benchmark_Product_Summary, Rule, Child_Rule, Engagement_Presets, DojoMeta, \
+    Benchmark_Product_Summary, Engagement_Presets, DojoMeta, \
     Engagement_Survey, Answered_Survey, TextAnswer, ChoiceAnswer, Choice, Question, TextQuestion, \
-    ChoiceQuestion, General_Survey, Regulation, FileUpload, SEVERITY_CHOICES, Product_Type_Member, \
+    ChoiceQuestion, General_Survey, Regulation, FileUpload, SEVERITY_CHOICES, EFFORT_FOR_FIXING_CHOICES, Product_Type_Member, \
     Product_Member, Global_Role, Dojo_Group, Product_Group, Product_Type_Group, Dojo_Group_Member, \
     Product_API_Scan_Configuration
 
@@ -64,6 +65,8 @@ vulnerability_ids_field = forms.CharField(max_length=5000,
     help_text="Ids of vulnerabilities in security advisories associated with this finding. Can be Common Vulnerabilities and Exposures (CVE) or from other sources."
                 "You may enter one vulnerability id per line.",
     widget=forms.widgets.Textarea(attrs={'rows': '3', 'cols': '400'}))
+
+EFFORT_FOR_FIXING_INVALID_CHOICE = _('Select valid choice: Low,Medium,High')
 
 
 class MultipleSelectWithPop(forms.SelectMultiple):
@@ -263,8 +266,8 @@ class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
         fields = ['name', 'description', 'tags', 'product_manager', 'technical_contact', 'team_manager', 'prod_type', 'sla_configuration', 'regulations',
-                'business_criticality', 'platform', 'lifecycle', 'origin', 'user_records', 'revenue', 'external_audience',
-                'internet_accessible', 'enable_simple_risk_acceptance', 'enable_full_risk_acceptance']
+                'business_criticality', 'platform', 'lifecycle', 'origin', 'user_records', 'revenue', 'external_audience', 'enable_product_tag_inheritance',
+                'internet_accessible', 'enable_simple_risk_acceptance', 'enable_full_risk_acceptance', 'disable_sla_breach_notifications']
 
 
 class DeleteProductForm(forms.ModelForm):
@@ -274,6 +277,31 @@ class DeleteProductForm(forms.ModelForm):
     class Meta:
         model = Product
         fields = ['id']
+
+
+class EditFindingGroupForm(forms.ModelForm):
+    name = forms.CharField(max_length=255, required=True, label='Finding Group Name')
+    jira_issue = forms.CharField(max_length=255, required=False, label='Linked JIRA Issue',
+                                 help_text='Leave empty and check push to jira to create a new JIRA issue for this finding group.')
+
+    def __init__(self, *args, **kwargs):
+        super(EditFindingGroupForm, self).__init__(*args, **kwargs)
+        import dojo.jira_link.helper as jira_helper
+
+        self.fields['push_to_jira'] = forms.BooleanField()
+        self.fields['push_to_jira'].required = False
+        self.fields['push_to_jira'].help_text = "Checking this will overwrite content of your JIRA issue, or create one."
+
+        self.fields['push_to_jira'].label = "Push to JIRA"
+
+        if hasattr(self.instance, 'has_jira_issue') and self.instance.has_jira_issue:
+            jira_url = jira_helper.get_jira_url(self.instance)
+            self.fields['jira_issue'].initial = jira_url
+            self.fields['push_to_jira'].widget.attrs['checked'] = 'checked'
+
+    class Meta:
+        model = Finding_Group
+        fields = ['name']
 
 
 class DeleteFindingGroupForm(forms.ModelForm):
@@ -385,6 +413,9 @@ class DojoMetaDataForm(forms.ModelForm):
 
 
 class ImportScanForm(forms.Form):
+    active_verified_choices = [("not_specified", "Not specified (default)"),
+                               ("force_to_true", "Force to True"),
+                               ("force_to_false", "Force to False")]
     scan_date = forms.DateTimeField(
         required=False,
         label="Scan Completion Date",
@@ -393,8 +424,11 @@ class ImportScanForm(forms.Form):
     minimum_severity = forms.ChoiceField(help_text='Minimum severity level to be imported',
                                          required=True,
                                          choices=SEVERITY_CHOICES)
-    active = forms.BooleanField(help_text="Select if these findings are currently active.", required=False, initial=True)
-    verified = forms.BooleanField(help_text="Select if these findings have been verified.", required=False)
+    active = forms.ChoiceField(required=True, choices=active_verified_choices,
+                               help_text='Force findings to be active/inactive, or default to the original tool')
+    verified = forms.ChoiceField(required=True, choices=active_verified_choices,
+                               help_text='Force findings to be verified/not verified, or default to the original tool')
+
     # help_do_not_reactivate = 'Select if the import should ignore active findings from the report, useful for triage-less scanners. Will keep existing findings closed, without reactivating them. For more information check the docs.'
     # do_not_reactivate = forms.BooleanField(help_text=help_do_not_reactivate, required=False)
     scan_type = forms.ChoiceField(required=True, choices=get_choices_sorted)
@@ -422,10 +456,21 @@ class ImportScanForm(forms.Form):
         allow_empty_file=True,
         required=False)
 
-    close_old_findings = forms.BooleanField(help_text="Select if old findings no longer present in the report get closed as mitigated when importing. "
+    # Close Old Findings has changed. The default is engagement only, and it requires a second flag to expand to the product scope.
+    # Exposing the choice as two different check boxes.
+    # If 'close_old_findings_product_scope' is selected, the backend will ensure that both flags are set.
+    close_old_findings = forms.BooleanField(help_text="Old findings no longer present in the new report get closed as mitigated when importing. "
                                                         "If service has been set, only the findings for this service will be closed. "
-                                                        "This affects the whole engagement/product depending on your deduplication scope.",
-                                            required=False, initial=False)
+                                                        "This only affects findings within the same engagement.",
+                                            label="Close old findings within this engagement",
+                                            required=False,
+                                            initial=False)
+    close_old_findings_product_scope = forms.BooleanField(help_text="Old findings no longer present in the new report get closed as mitigated when importing. "
+                                                        "If service has been set, only the findings for this service will be closed. "
+                                                        "This only affects findings within the same product.",
+                                            label="Close old findings within this product",
+                                            required=False,
+                                            initial=False)
 
     if is_finding_groups_enabled():
         group_by = forms.ChoiceField(required=False, choices=Finding_Group.GROUP_BY_OPTIONS, help_text='Choose an option to automatically group new findings by the chosen option.')
@@ -433,6 +478,8 @@ class ImportScanForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super(ImportScanForm, self).__init__(*args, **kwargs)
+        self.fields['active'].initial = self.active_verified_choices[0]
+        self.fields['verified'].initial = self.active_verified_choices[0]
 
         # couldn't find a cleaner way to add empty default
         if 'group_by' in self.fields:
@@ -475,6 +522,9 @@ class ImportScanForm(forms.Form):
 
 
 class ReImportScanForm(forms.Form):
+    active_verified_choices = [("not_specified", "Not specified (default)"),
+                               ("force_to_true", "Force to True"),
+                               ("force_to_false", "Force to False")]
     scan_date = forms.DateTimeField(
         required=False,
         label="Scan Completion Date",
@@ -483,8 +533,11 @@ class ReImportScanForm(forms.Form):
     minimum_severity = forms.ChoiceField(help_text='Minimum severity level to be imported',
                                          required=True,
                                          choices=SEVERITY_CHOICES[0:4])
-    active = forms.BooleanField(help_text="Select if these findings are currently active.", required=False, initial=True)
-    verified = forms.BooleanField(help_text="Select if these findings have been verified.", required=False)
+    active = forms.ChoiceField(required=True, choices=active_verified_choices,
+                               help_text='Force findings to be active/inactive, or default to the original tool')
+    verified = forms.ChoiceField(required=True, choices=active_verified_choices,
+                             help_text='Force findings to be verified/not verified, or default to the original tool')
+
     help_do_not_reactivate = 'Select if the import should ignore active findings from the report, useful for triage-less scanners. Will keep existing findings closed, without reactivating them. For more information check the docs.'
     do_not_reactivate = forms.BooleanField(help_text=help_do_not_reactivate, required=False)
     endpoints = forms.ModelMultipleChoiceField(Endpoint.objects, required=False, label='Systems / Endpoints')
@@ -511,6 +564,8 @@ class ReImportScanForm(forms.Form):
 
     def __init__(self, *args, test=None, **kwargs):
         super(ReImportScanForm, self).__init__(*args, **kwargs)
+        self.fields['active'].initial = self.active_verified_choices[0]
+        self.fields['verified'].initial = self.active_verified_choices[0]
         self.scan_type = None
         if test:
             self.scan_type = test.test_type.name
@@ -815,7 +870,7 @@ class EngForm(forms.ModelForm):
 
     class Meta:
         model = Engagement
-        exclude = ('first_contacted', 'real_start', 'engagement_type',
+        exclude = ('first_contacted', 'real_start', 'engagement_type', 'inherited_tags',
                    'real_end', 'requester', 'reason', 'updated', 'report_type',
                    'product', 'threat_model', 'api_test', 'pen_test', 'check_list')
 
@@ -902,7 +957,7 @@ class AddFindingForm(forms.ModelForm):
         choices=SEVERITY_CHOICES,
         error_messages={
             'required': 'Select valid choice: In Progress, On Hold, Completed',
-            'invalid_choice': 'Select valid choice: Critical,High,Medium,Low'})
+            'invalid_choice': EFFORT_FOR_FIXING_INVALID_CHOICE})
     mitigation = forms.CharField(widget=forms.Textarea, required=False)
     impact = forms.CharField(widget=forms.Textarea, required=False)
     request = forms.CharField(widget=forms.Textarea, required=False)
@@ -915,6 +970,12 @@ class AddFindingForm(forms.ModelForm):
     references = forms.CharField(widget=forms.Textarea, required=False)
     publish_date = forms.DateField(widget=forms.TextInput(attrs={'class': 'datepicker', 'autocomplete': 'off'}), required=False)
     planned_remediation_date = forms.DateField(widget=forms.TextInput(attrs={'class': 'datepicker', 'autocomplete': 'off'}), required=False)
+    planned_remediation_version = forms.CharField(max_length=99, required=False)
+    effort_for_fixing = forms.ChoiceField(
+        required=False,
+        choices=EFFORT_FOR_FIXING_CHOICES,
+        error_messages={
+            'invalid_choice': EFFORT_FOR_FIXING_INVALID_CHOICE})
 
     # the only reliable way without hacking internal fields to get predicatble ordering is to make it explicit
     field_order = ('title', 'date', 'cwe', 'vulnerability_ids', 'severity', 'cvssv3', 'description', 'mitigation', 'impact', 'request', 'response', 'steps_to_reproduce',
@@ -961,7 +1022,7 @@ class AddFindingForm(forms.ModelForm):
 
     class Meta:
         model = Finding
-        exclude = ('reporter', 'url', 'numerical_severity', 'under_review', 'reviewers', 'cve',
+        exclude = ('reporter', 'url', 'numerical_severity', 'under_review', 'reviewers', 'cve', 'inherited_tags',
                    'review_requested_by', 'is_mitigated', 'jira_creation', 'jira_change', 'endpoints', 'sla_start_date')
 
 
@@ -977,7 +1038,7 @@ class AdHocFindingForm(forms.ModelForm):
         choices=SEVERITY_CHOICES,
         error_messages={
             'required': 'Select valid choice: In Progress, On Hold, Completed',
-            'invalid_choice': 'Select valid choice: Critical,High,Medium,Low'})
+            'invalid_choice': EFFORT_FOR_FIXING_INVALID_CHOICE})
     mitigation = forms.CharField(widget=forms.Textarea, required=False)
     impact = forms.CharField(widget=forms.Textarea, required=False)
     request = forms.CharField(widget=forms.Textarea, required=False)
@@ -990,6 +1051,12 @@ class AdHocFindingForm(forms.ModelForm):
     references = forms.CharField(widget=forms.Textarea, required=False)
     publish_date = forms.DateField(widget=forms.TextInput(attrs={'class': 'datepicker', 'autocomplete': 'off'}), required=False)
     planned_remediation_date = forms.DateField(widget=forms.TextInput(attrs={'class': 'datepicker', 'autocomplete': 'off'}), required=False)
+    planned_remediation_version = forms.CharField(max_length=99, required=False)
+    effort_for_fixing = forms.ChoiceField(
+        required=False,
+        choices=EFFORT_FOR_FIXING_CHOICES,
+        error_messages={
+            'invalid_choice': EFFORT_FOR_FIXING_INVALID_CHOICE})
 
     # the only reliable way without hacking internal fields to get predicatble ordering is to make it explicit
     field_order = ('title', 'date', 'cwe', 'vulnerability_ids', 'severity', 'cvssv3', 'description', 'mitigation', 'impact', 'request', 'response', 'steps_to_reproduce',
@@ -1033,7 +1100,7 @@ class AdHocFindingForm(forms.ModelForm):
 
     class Meta:
         model = Finding
-        exclude = ('reporter', 'url', 'numerical_severity', 'under_review', 'reviewers', 'cve',
+        exclude = ('reporter', 'url', 'numerical_severity', 'under_review', 'reviewers', 'cve', 'inherited_tags',
                    'review_requested_by', 'is_mitigated', 'jira_creation', 'jira_change', 'endpoint_status', 'sla_start_date')
 
 
@@ -1090,8 +1157,8 @@ class PromoteFindingForm(forms.ModelForm):
 
     class Meta:
         model = Finding
-        exclude = ('reporter', 'url', 'numerical_severity', 'active', 'false_p', 'verified', 'endpoint_status', 'cve',
-                   'duplicate', 'out_of_scope', 'under_review', 'reviewers', 'review_requested_by', 'is_mitigated', 'jira_creation', 'jira_change', 'planned_remediation_date')
+        exclude = ('reporter', 'url', 'numerical_severity', 'active', 'false_p', 'verified', 'endpoint_status', 'cve', 'inherited_tags',
+                   'duplicate', 'out_of_scope', 'under_review', 'reviewers', 'review_requested_by', 'is_mitigated', 'jira_creation', 'jira_change', 'planned_remediation_date', 'planned_remediation_version', 'effort_for_fixing')
 
 
 class FindingForm(forms.ModelForm):
@@ -1124,8 +1191,14 @@ class FindingForm(forms.ModelForm):
 
     publish_date = forms.DateField(widget=forms.TextInput(attrs={'class': 'datepicker', 'autocomplete': 'off'}), required=False)
     planned_remediation_date = forms.DateField(widget=forms.TextInput(attrs={'class': 'datepicker', 'autocomplete': 'off'}), required=False)
+    planned_remediation_version = forms.CharField(max_length=99, required=False)
+    effort_for_fixing = forms.ChoiceField(
+        required=False,
+        choices=EFFORT_FOR_FIXING_CHOICES,
+        error_messages={
+            'invalid_choice': EFFORT_FOR_FIXING_INVALID_CHOICE})
 
-    # the onyl reliable way without hacking internal fields to get predicatble ordering is to make it explicit
+    # the only reliable way without hacking internal fields to get predicatble ordering is to make it explicit
     field_order = ('title', 'group', 'date', 'sla_start_date', 'cwe', 'vulnerability_ids', 'severity', 'cvssv3', 'cvssv3_score', 'description', 'mitigation', 'impact',
                    'request', 'response', 'steps_to_reproduce', 'severity_justification', 'endpoints', 'endpoints_to_add', 'references',
                    'active', 'mitigated', 'mitigated_by', 'verified', 'false_p', 'duplicate',
@@ -1217,7 +1290,7 @@ class FindingForm(forms.ModelForm):
 
     class Meta:
         model = Finding
-        exclude = ('reporter', 'url', 'numerical_severity', 'under_review', 'reviewers', 'cve',
+        exclude = ('reporter', 'url', 'numerical_severity', 'under_review', 'reviewers', 'cve', 'inherited_tags',
                    'review_requested_by', 'is_mitigated', 'jira_creation', 'jira_change', 'sonarqube_issue', 'endpoint_status')
 
 
@@ -1322,7 +1395,9 @@ class FindingBulkUpdateForm(forms.ModelForm):
     risk_accept = forms.BooleanField(required=False)
     risk_unaccept = forms.BooleanField(required=False)
 
+    date = forms.DateField(required=False, widget=forms.DateInput(attrs={'class': 'datepicker'}))
     planned_remediation_date = forms.DateField(required=False, widget=forms.DateInput(attrs={'class': 'datepicker'}))
+    planned_remediation_version = forms.CharField(required=False, max_length=99, widget=forms.TextInput(attrs={'class': 'form-control'}))
     finding_group = forms.BooleanField(required=False)
     finding_group_create = forms.BooleanField(required=False)
     finding_group_create_name = forms.CharField(required=False)
@@ -1357,14 +1432,14 @@ class FindingBulkUpdateForm(forms.ModelForm):
 
     class Meta:
         model = Finding
-        fields = ('severity', 'planned_remediation_date', 'active', 'verified', 'false_p', 'duplicate', 'out_of_scope',
+        fields = ('severity', 'date', 'planned_remediation_date', 'active', 'verified', 'false_p', 'duplicate', 'out_of_scope',
                   'is_mitigated')
 
 
 class EditEndpointForm(forms.ModelForm):
     class Meta:
         model = Endpoint
-        exclude = ['product']
+        exclude = ['product', 'inherited_tags']
 
     def __init__(self, *args, **kwargs):
         self.product = None
@@ -1373,6 +1448,9 @@ class EditEndpointForm(forms.ModelForm):
         if 'instance' in kwargs:
             self.endpoint_instance = kwargs.pop('instance')
             self.product = self.endpoint_instance.product
+            product_id = self.endpoint_instance.product.pk
+            findings = Finding.objects.filter(test__engagement__product__id=product_id)
+            self.fields["findings"].queryset = findings
 
     def clean(self):
 
@@ -1604,37 +1682,56 @@ class ClearFindingReviewForm(forms.ModelForm):
 
 
 class ReviewFindingForm(forms.Form):
-
-    reviewers = forms.MultipleChoiceField(help_text="Select all users who can review Finding.")
+    reviewers = forms.MultipleChoiceField(
+        help_text=(
+            "Select all users who can review Finding. Only users with "
+            "at least write permission to this finding can be selected"),
+        required=False,
+    )
     entry = forms.CharField(
         required=True, max_length=2400,
-        help_text='Please provide a message for reviewers.',
-        widget=forms.Textarea, label='Notes:',
-        error_messages={'required': ('The reason for requesting a review is '
-                                     'required, please use the text area '
-                                     'below to provide documentation.')})
+        help_text="Please provide a message for reviewers.",
+        widget=forms.Textarea, label="Notes:",
+        error_messages={"required": ("The reason for requesting a review is "
+                                     "required, please use the text area "
+                                     "below to provide documentation.")})
+    allow_all_reviewers = forms.BooleanField(
+        required=False,
+        label="Allow All Eligible Reviewers",
+        help_text=("Checking this box will allow any user in the drop down "
+                   "above to provide a review for this finding"))
 
     def __init__(self, *args, **kwargs):
-        finding = None
-        if 'finding' in kwargs:
-            finding = kwargs.pop('finding')
-
+        finding = kwargs.pop("finding", None)
+        user = kwargs.pop("user", None)
         super(ReviewFindingForm, self).__init__(*args, **kwargs)
-        self.fields['reviewers'].choices = self._get_choices(get_authorized_users(Permissions.Finding_View).filter(is_active=True))
-
+        # Get the list of users
         if finding is not None:
-            queryset = get_authorized_users_for_product_and_product_type(None, finding.test.engagement.product, Permissions.Finding_Edit)
-            self.fields['reviewers'].choices = self._get_choices(queryset)
+            users = get_authorized_users_for_product_and_product_type(None, finding.test.engagement.product, Permissions.Finding_Edit)
+        else:
+            users = get_authorized_users(Permissions.Finding_Edit).filter(is_active=True)
+        # Remove the current user
+        if user is not None:
+            users = users.exclude(id=user.id)
+        # Save a copy of the original query to be used in the validator
+        self.reviewer_queryset = users
+        # Set the users in the form
+        self.fields["reviewers"].choices = self._get_choices(self.reviewer_queryset)
 
     @staticmethod
     def _get_choices(queryset):
-        l_choices = []
-        for item in queryset:
-            l_choices.append((item.pk, item.get_full_name()))
-        return l_choices
+        return [(item.pk, item.get_full_name()) for item in queryset]
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data.get("allow_all_reviewers", False):
+            cleaned_data["reviewers"] = [user.id for user in self.reviewer_queryset]
+        if len(cleaned_data.get("reviewers", [])) == 0:
+            raise ValidationError("Please select at least one user from the reviewers list")
+        return cleaned_data
 
     class Meta:
-        fields = ['reviewers', 'entry']
+        fields = ["reviewers", "entry", "allow_all_reviewers"]
 
 
 class WeeklyMetricsForm(forms.Form):
@@ -2443,14 +2540,25 @@ class DeleteEngagementPresetsForm(forms.ModelForm):
 
 
 class SystemSettingsForm(forms.ModelForm):
+    jira_webhook_secret = forms.CharField(required=False)
 
     def __init__(self, *args, **kwargs):
         super(SystemSettingsForm, self).__init__(*args, **kwargs)
         self.fields['default_group_role'].queryset = get_group_member_roles()
 
+    def clean(self):
+        cleaned_data = super().clean()
+        enable_jira_value = cleaned_data.get('enable_jira')
+        jira_webhook_secret_value = cleaned_data.get('jira_webhook_secret').strip()
+
+        if enable_jira_value and not jira_webhook_secret_value:
+            self.add_error('jira_webhook_secret', 'This field is required when enable Jira Integration is True')
+
+        return cleaned_data
+
     class Meta:
         model = System_Settings
-        exclude = ['product_grade', 'credentials', 'column_widths', 'drive_folder_ID']
+        exclude = ['product_grade']
 
 
 class BenchmarkForm(forms.ModelForm):
@@ -2494,32 +2602,6 @@ class ProductNotificationsForm(forms.ModelForm):
 class AjaxChoiceField(forms.ChoiceField):
     def valid_value(self, value):
         return True
-
-
-class RuleForm(forms.ModelForm):
-
-    class Meta:
-        model = Rule
-        exclude = ['key_product']
-
-
-class ChildRuleForm(forms.ModelForm):
-
-    class Meta:
-        model = Child_Rule
-        exclude = ['key_product']
-
-
-RuleFormSet = modelformset_factory(Child_Rule, extra=2, max_num=10, exclude=[''], can_delete=True)
-
-
-class DeleteRuleForm(forms.ModelForm):
-    id = forms.IntegerField(required=True,
-                            widget=forms.widgets.HiddenInput())
-
-    class Meta:
-        model = Rule
-        fields = ['id']
 
 
 class CredUserForm(forms.ModelForm):
@@ -2831,43 +2913,6 @@ class JIRAEngagementForm(forms.Form):
     epic_priority = forms.CharField(max_length=200, required=False, help_text="EPIC priority. If not specified, the JIRA default priority will be used")
 
 
-class GoogleSheetFieldsForm(forms.Form):
-    cred_file = forms.FileField(widget=forms.widgets.FileInput(
-        attrs={"accept": ".json"}),
-        label="Google credentials file",
-        required=True,
-        allow_empty_file=False,
-        help_text="Upload the credentials file downloaded from the Google Developer Console")
-    drive_folder_ID = forms.CharField(
-        required=True,
-        label="Google Drive folder ID",
-        help_text="Extract the Drive folder ID from the URL and provide it here")
-    email_address = forms.EmailField(
-        required=True,
-        label="Email Address",
-        help_text="Enter the same email Address used to create the Service Account")
-    enable_service = forms.BooleanField(
-        initial=False,
-        required=False,
-        help_text='Tick this check box to enable Google Sheets Sync feature')
-
-    def __init__(self, *args, **kwargs):
-        self.credentials_required = kwargs.pop('credentials_required')
-        options = ((0, 'Hide'), (100, 'Small'), (200, 'Medium'), (400, 'Large'))
-        protect = ['reporter', 'url', 'numerical_severity', 'endpoint', 'under_review', 'reviewers',
-                   'review_requested_by', 'is_mitigated', 'jira_creation', 'jira_change', 'sonarqube_issue']
-        self.all_fields = kwargs.pop('all_fields')
-        super(GoogleSheetFieldsForm, self).__init__(*args, **kwargs)
-        if not self.credentials_required:
-            self.fields['cred_file'].required = False
-        for i in self.all_fields:
-            self.fields[i.name] = forms.ChoiceField(choices=options)
-            if i.name == 'id' or i.editable is False or i.many_to_one or i.name in protect:
-                self.fields['Protect ' + i.name] = forms.BooleanField(initial=True, required=True, disabled=True)
-            else:
-                self.fields['Protect ' + i.name] = forms.BooleanField(initial=False, required=False)
-
-
 class LoginBanner(forms.Form):
     banner_enable = forms.BooleanField(
         label="Enable login banner",
@@ -2884,6 +2929,27 @@ class LoginBanner(forms.Form):
     def clean(self):
         cleaned_data = super().clean()
         return cleaned_data
+
+
+class AnnouncementCreateForm(forms.ModelForm):
+    dismissable = forms.BooleanField(
+        label=_('Dismissable?'),
+        initial=False,
+        required=False,
+        help_text=_('Ticking this box allows users to dismiss the current announcement')
+    )
+
+    class Meta:
+        model = Announcement
+        fields = ['message', 'style']
+
+
+class AnnouncementRemoveForm(AnnouncementCreateForm):
+    def __init__(self, *args, **kwargs):
+        super(AnnouncementRemoveForm, self).__init__(*args, **kwargs)
+        self.fields['dismissable'].disabled = True
+        self.fields['message'].disabled = True
+        self.fields['style'].disabled = True
 
 
 # ==============================
@@ -2990,8 +3056,7 @@ class ChoiceQuestionForm(QuestionForm):
         # we have ChoiceAnswer instance
         if choice_answer:
             choice_answer = choice_answer[0]
-            initial_choices = choice_answer.answer.all().values_list('id',
-                                                                     flat=True)
+            initial_choices = list(choice_answer.answer.all().values_list('id', flat=True))
             if self.question.multichoice is False:
                 initial_choices = initial_choices[0]
 

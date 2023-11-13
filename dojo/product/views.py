@@ -16,13 +16,14 @@ from django.db import DEFAULT_DB_ALIAS, connection
 from django.db.models import Sum, Count, Q, Max, Prefetch, F, OuterRef, Subquery
 from django.db.models.query import QuerySet
 from django.core.exceptions import ValidationError, PermissionDenied
-from django.http import HttpResponseRedirect, Http404
+from django.http import HttpResponseRedirect, Http404, JsonResponse, HttpRequest
 from django.shortcuts import render, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
+from django.views import View
 
-from dojo.templatetags.display_tags import get_level
+from dojo.templatetags.display_tags import asvs_calc_level
 from dojo.filters import ProductEngagementFilter, ProductFilter, EngagementFilter, MetricsEndpointFilter, \
     MetricsFindingFilter, ProductComponentFilter
 from dojo.forms import ProductForm, EngForm, DeleteProductForm, DojoMetaDataForm, JIRAProjectForm, JIRAFindingForm, \
@@ -33,13 +34,13 @@ from dojo.forms import ProductForm, EngForm, DeleteProductForm, DojoMetaDataForm
     Delete_Product_GroupForm, SLA_Configuration, \
     DeleteAppAnalysisForm, Product_API_Scan_ConfigurationForm, DeleteProduct_API_Scan_ConfigurationForm
 from dojo.models import Product_Type, Note_Type, Finding, Product, Engagement, Test, GITHUB_PKey, \
-    Test_Type, System_Settings, Languages, App_Analysis, Benchmark_Type, Benchmark_Product_Summary, Endpoint_Status, \
+    Test_Type, System_Settings, Languages, App_Analysis, Benchmark_Product_Summary, Endpoint_Status, \
     Endpoint, Engagement_Presets, DojoMeta, Notifications, BurpRawRequestResponse, Product_Member, \
     Product_Group, Product_API_Scan_Configuration
 from dojo.utils import add_external_issue, add_error_message_to_response, add_field_errors_to_response, get_page_items, \
     add_breadcrumb, async_delete, \
     get_system_setting, get_setting, Product_Tab, get_punchcard_data, queryset_check, is_title_in_breadcrumbs, \
-    get_enabled_notifications_list
+    get_enabled_notifications_list, get_zero_severity_level, sum_by_severity_level, get_open_findings_burndown
 
 from dojo.notifications.helper import create_notification
 from dojo.components.sql_group_concat import Sql_GroupConcat
@@ -51,6 +52,7 @@ from dojo.product.queries import get_authorized_products, get_authorized_members
 from dojo.product_type.queries import get_authorized_members_for_product_type, get_authorized_groups_for_product_type, \
     get_authorized_product_types
 from dojo.tool_config.factory import create_API
+from dojo.tools.factory import get_api_scan_configuration_hints
 
 import dojo.finding.helper as finding_helper
 import dojo.jira_link.helper as jira_helper
@@ -153,16 +155,29 @@ def view_product(request, pid):
     personal_notifications_form = ProductNotificationsForm(
         instance=Notifications.objects.filter(user=request.user).filter(product=prod).first())
     langSummary = Languages.objects.filter(product=prod).aggregate(Sum('files'), Sum('code'), Count('files'))
-    languages = Languages.objects.filter(product=prod).order_by('-code')
+    languages = Languages.objects.filter(product=prod).order_by('-code').select_related('language')
     app_analysis = App_Analysis.objects.filter(product=prod).order_by('name')
-    benchmark_type = Benchmark_Type.objects.filter(enabled=True).order_by('name')
     benchmarks = Benchmark_Product_Summary.objects.filter(product=prod, publish=True,
                                                           benchmark_type__enabled=True).order_by('benchmark_type__name')
     sla = SLA_Configuration.objects.filter(id=prod.sla_configuration_id).first()
     benchAndPercent = []
     for i in range(0, len(benchmarks)):
-        benchAndPercent.append([benchmarks[i].benchmark_type, get_level(benchmarks[i])])
+        desired_level, total, total_pass, total_wait, total_fail, total_viewed = asvs_calc_level(benchmarks[i])
 
+        success_percent = round((float(total_pass) / float(total)) * 100, 2)
+        waiting_percent = round((float(total_wait) / float(total)) * 100, 2)
+        fail_percent = round(100 - success_percent - waiting_percent, 2)
+        print(fail_percent)
+        benchAndPercent.append({
+            'id': benchmarks[i].benchmark_type.id,
+            'name': benchmarks[i].benchmark_type,
+            'level': desired_level,
+            'success': {'count': total_pass, 'percent': success_percent},
+            'waiting': {'count': total_wait, 'percent': waiting_percent},
+            'fail': {'count': total_fail, 'percent': fail_percent},
+            'pass': total_pass + total_fail,
+            'total': total
+        })
     system_settings = System_Settings.objects.get()
 
     product_metadata = dict(prod.product_meta.order_by('name').values_list('name', 'value'))
@@ -444,7 +459,8 @@ def endpoint_querys(request, prod):
                                                   mitigated=True,
                                                   out_of_scope=False).order_by("date")
     filters['open'] = endpoints_qs.filter(date__range=[start_date, end_date],
-                                          mitigated=False)
+                                          mitigated=False,
+                                          finding__active=True)
     filters['inactive'] = endpoints_qs.filter(date__range=[start_date, end_date],
                                               mitigated=True)
     filters['closed'] = endpoints_qs.filter(date__range=[start_date, end_date],
@@ -525,6 +541,9 @@ def view_product_metrics(request, pid):
     high_weekly = OrderedDict()
     medium_weekly = OrderedDict()
 
+    open_objs_by_severity = get_zero_severity_level()
+    accepted_objs_by_severity = get_zero_severity_level()
+
     for v in filters.get('open', None):
         iso_cal = v.date.isocalendar()
         x = iso_to_gregorian(iso_cal[0], iso_cal[1], 1)
@@ -560,8 +579,7 @@ def view_product_metrics(request, pid):
             else:
                 severity_weekly[x][severity] = 1
         else:
-            severity_weekly[x] = {'Critical': 0, 'High': 0,
-                                  'Medium': 0, 'Low': 0, 'Info': 0}
+            severity_weekly[x] = get_zero_severity_level()
             severity_weekly[x][severity] = 1
             severity_weekly[x]['week'] = y
 
@@ -581,6 +599,10 @@ def view_product_metrics(request, pid):
             else:
                 medium_weekly[x] = {'count': 1, 'week': y}
 
+        # Optimization: count severity level on server side
+        if open_objs_by_severity.get(v.severity) is not None:
+            open_objs_by_severity[v.severity] += 1
+
     for a in filters.get('accepted', None):
         if view == 'Finding':
             finding = a
@@ -597,13 +619,19 @@ def view_product_metrics(request, pid):
             open_close_weekly[x] = {'closed': 0, 'open': 0, 'accepted': 1}
             open_close_weekly[x]['week'] = y
 
+        if accepted_objs_by_severity.get(a.severity) is not None:
+            accepted_objs_by_severity[a.severity] += 1
+
     test_data = {}
     for t in tests:
         if t.test_type.name in test_data:
             test_data[t.test_type.name] += t.verified_finding_count
         else:
             test_data[t.test_type.name] = t.verified_finding_count
+
     product_tab = Product_Tab(prod, title=_("Product"), tab="metrics")
+
+    open_objs_by_age = {x: len([_ for _ in filters.get('open') if _.age == x]) for x in set([_.age for _ in filters.get('open')])}
 
     return render(request, 'dojo/product_metrics.html', {
         'prod': prod,
@@ -612,14 +640,24 @@ def view_product_metrics(request, pid):
         'inactive_engs': inactive_engs_page,
         'view': view,
         'verified_objs': filters.get('verified', None),
+        'verified_objs_by_severity': sum_by_severity_level(filters.get('verified')),
         'open_objs': filters.get('open', None),
+        'open_objs_by_severity': open_objs_by_severity,
+        'open_objs_by_age': open_objs_by_age,
         'inactive_objs': filters.get('inactive', None),
+        'inactive_objs_by_severity': sum_by_severity_level(filters.get('inactive')),
         'closed_objs': filters.get('closed', None),
+        'closed_objs_by_severity': sum_by_severity_level(filters.get('closed')),
         'false_positive_objs': filters.get('false_positive', None),
+        'false_positive_objs_by_severity': sum_by_severity_level(filters.get('false_positive')),
         'out_of_scope_objs': filters.get('out_of_scope', None),
+        'out_of_scope_objs_by_severity': sum_by_severity_level(filters.get('out_of_scope')),
         'accepted_objs': filters.get('accepted', None),
+        'accepted_objs_by_severity': accepted_objs_by_severity,
         'new_objs': filters.get('new_verified', None),
+        'new_objs_by_severity': sum_by_severity_level(filters.get('new_verified')),
         'all_objs': filters.get('all', None),
+        'all_objs_by_severity': sum_by_severity_level(filters.get('all')),
         'form': filters.get('form', None),
         'reset_link': reverse('view_product_metrics', args=(prod.id,)) + '?type=' + view,
         'open_vulnerabilities': open_vulnerabilities,
@@ -634,6 +672,22 @@ def view_product_metrics(request, pid):
         'medium_weekly': medium_weekly,
         'test_data': test_data,
         'user': request.user})
+
+
+@user_is_authorized(Product, Permissions.Product_View, 'pid')
+def async_burndown_metrics(request, pid):
+    prod = get_object_or_404(Product, id=pid)
+    open_findings_burndown = get_open_findings_burndown(prod)
+
+    return JsonResponse({
+        'critical': open_findings_burndown.get('Critical', []),
+        'high': open_findings_burndown.get('High', []),
+        'medium': open_findings_burndown.get('Medium', []),
+        'low': open_findings_burndown.get('Low', []),
+        'info': open_findings_burndown.get('Info', []),
+        'max': open_findings_burndown.get('y_max', 0),
+        'min': open_findings_burndown.get('y_min', 0)
+    })
 
 
 @user_is_authorized(Product, Permissions.Engagement_View, 'pid')
@@ -872,7 +926,7 @@ def edit_product(request, pid):
         else:
             jform = None
 
-        if github_enabled and (github_inst is not None):
+        if github_enabled:
             if github_inst is not None:
                 gform = GITHUB_Product_Form(instance=github_inst)
             else:
@@ -918,7 +972,7 @@ def delete_product(request, pid):
                                     product_type=product_type,
                                     description=_('The product "%(name)s" was deleted by %(user)s') % {
                                         'name': product.name, 'user': request.user},
-                                    url=request.build_absolute_uri(reverse('product')),
+                                    url=reverse('product'),
                                     icon="exclamation-triangle")
                 logger.debug('delete_product: POST RETURN')
                 return HttpResponseRedirect(reverse('product'))
@@ -1164,160 +1218,283 @@ def edit_meta_data(request, pid):
                    })
 
 
-@user_is_authorized(Product, Permissions.Finding_Add, 'pid')
-def ad_hoc_finding(request, pid):
-    prod = Product.objects.get(id=pid)
-    test_type, res = Test_Type.objects.get_or_create(name=_("Pen Test"))
-    test = None
-    try:
-        eng = Engagement.objects.get(product=prod, name=_("Ad Hoc Engagement"))
-        tests = Test.objects.filter(engagement=eng)
+class AdHocFindingView(View):
+    def get_product(self, product_id: int):
+        return get_object_or_404(Product, id=product_id)
 
-        if len(tests) != 0:
-            test = tests[0]
+    def get_test_type(self):
+        test_type, nil = Test_Type.objects.get_or_create(name=_("Pen Test"))
+        return test_type
+
+    def get_engagement(self, product: Product):
+        try:
+            return Engagement.objects.get(product=product, name=_("Ad Hoc Engagement"))
+        except Engagement.DoesNotExist:
+            return Engagement.objects.create(
+                name=_("Ad Hoc Engagement"),
+                target_start=timezone.now(),
+                target_end=timezone.now(),
+                active=False, product=product)
+
+    def get_test(self, engagement: Engagement, test_type: Test_Type):
+        if test := Test.objects.filter(engagement=engagement).first():
+            return test
         else:
-            test = Test(engagement=eng, test_type=test_type,
-                        target_start=timezone.now(), target_end=timezone.now())
-            test.save()
-    except:
-        eng = Engagement(name=_("Ad Hoc Engagement"), target_start=timezone.now(),
-                         target_end=timezone.now(), active=False, product=prod)
-        eng.save()
-        test = Test(engagement=eng, test_type=test_type,
-                    target_start=timezone.now(), target_end=timezone.now())
-        test.save()
-    form_error = False
-    push_all_jira_issues = jira_helper.is_push_all_issues(test)
-    jform = None
-    gform = None
-    form = AdHocFindingForm(initial={'date': timezone.now().date()}, req_resp=None, product=prod)
-    use_jira = jira_helper.get_jira_project(test) is not None
+            return Test.objects.create(
+                engagement=engagement,
+                test_type=test_type,
+                target_start=timezone.now(),
+                target_end=timezone.now())
 
-    if request.method == 'POST':
-        form = AdHocFindingForm(request.POST, req_resp=None, product=prod)
-        if (form['active'].value() is False or form['false_p'].value()) and form['duplicate'].value() is False:
+    def create_nested_objects(self, product: Product):
+        engagement = self.get_engagement(product)
+        test_type = self.get_test_type()
+        return self.get_test(engagement, test_type)
+
+    def get_initial_context(self, request: HttpRequest, test: Test):
+        # Get the finding form first since it is used in another place
+        finding_form = self.get_finding_form(request, test.engagement.product)
+        product_tab = Product_Tab(test.engagement.product, title=_("Add Finding"), tab="engagements")
+        product_tab.setEngagement(test.engagement)
+        return {
+            "form": finding_form,
+            "product_tab": product_tab,
+            "temp": False,
+            "tid": test.id,
+            "pid": test.engagement.product.id,
+            "form_error": False,
+            "jform": self.get_jira_form(request, test, finding_form=finding_form),
+            "gform": self.get_github_form(request, test),
+        }
+
+    def get_finding_form(self, request: HttpRequest, product: Product):
+        # Set up the args for the form
+        args = [request.POST] if request.method == "POST" else []
+        # Set the initial form args
+        kwargs = {
+            "initial": {'date': timezone.now().date()},
+            "req_resp": None,
+            "product": product,
+        }
+        # Remove the initial state on post
+        if request.method == "POST":
+            kwargs.pop("initial")
+
+        return AdHocFindingForm(*args, **kwargs)
+
+    def get_jira_form(self, request: HttpRequest, test: Test, finding_form: AdHocFindingForm = None):
+        # Determine if jira should be used
+        if (jira_project := jira_helper.get_jira_project(test)) is not None:
+            # Set up the args for the form
+            args = [request.POST] if request.method == "POST" else []
+            # Set the initial form args
+            kwargs = {
+                "push_all": jira_helper.is_push_all_issues(test),
+                "prefix": "jiraform",
+                "jira_project": jira_project,
+                "finding_form": finding_form,
+            }
+
+            return JIRAFindingForm(*args, **kwargs)
+        return None
+
+    def get_github_form(self, request: HttpRequest, test: Test):
+        # Determine if github should be used
+        if get_system_setting("enable_github"):
+            # Ensure there is a github conf correctly configured for the product
+            config_present = GITHUB_PKey.objects.filter(product=test.engagement.product)
+            if config_present := config_present.exclude(git_conf_id=None):
+                # Set up the args for the form
+                args = [request.POST] if request.method == "POST" else []
+                # Set the initial form args
+                kwargs = {
+                    "enabled": jira_helper.is_push_all_issues(test),
+                    "prefix": "githubform"
+                }
+
+                return GITHUBFindingForm(*args, **kwargs)
+        return None
+
+    def validate_status_change(self, request: HttpRequest, context: dict):
+        if ((context["form"]['active'].value() is False or
+             context["form"]['false_p'].value()) and
+             context["form"]['duplicate'].value() is False):
+
             closing_disabled = Note_Type.objects.filter(is_mandatory=True, is_active=True).count()
             if closing_disabled != 0:
-                error_inactive = ValidationError(_('Can not set a finding as inactive without adding all mandatory notes'),
-                                                 code='inactive_without_mandatory_notes')
+                error_inactive = ValidationError(
+                    _('Can not set a finding as inactive without adding all mandatory notes'),
+                    code='inactive_without_mandatory_notes'
+                )
                 error_false_p = ValidationError(
                     _('Can not set a finding as false positive without adding all mandatory notes'),
-                    code='false_p_without_mandatory_notes')
-                if form['active'].value() is False:
-                    form.add_error('active', error_inactive)
-                if form['false_p'].value():
-                    form.add_error('false_p', error_false_p)
-                messages.add_message(request,
-                                     messages.ERROR,
-                                     _('Can not set a finding as inactive or false positive without adding all mandatory notes'),
-                                     extra_tags='alert-danger')
-        if use_jira:
-            jform = JIRAFindingForm(request.POST, prefix='jiraform', push_all=push_all_jira_issues,
-                                    jira_project=jira_helper.get_jira_project(test), finding_form=form)
+                    code='false_p_without_mandatory_notes'
+                )
+                if context["form"]['active'].value() is False:
+                    context["form"].add_error('active', error_inactive)
+                if context["form"]['false_p'].value():
+                    context["form"].add_error('false_p', error_false_p)
+                messages.add_message(
+                    request,
+                    messages.ERROR,
+                    _('Can not set a finding as inactive or false positive without adding all mandatory notes'),
+                    extra_tags='alert-danger')
 
-        if form.is_valid() and (jform is None or jform.is_valid()):
-            new_finding = form.save(commit=False)
-            new_finding.test = test
-            new_finding.reporter = request.user
-            new_finding.numerical_severity = Finding.get_numerical_severity(
-                new_finding.severity)
-            new_finding.tags = form.cleaned_data['tags']
-            new_finding.save()
+        return request
 
+    def process_finding_form(self, request: HttpRequest, test: Test, context: dict):
+        finding = None
+        if context["form"].is_valid():
+            finding = context["form"].save(commit=False)
+            finding.test = test
+            finding.reporter = request.user
+            finding.numerical_severity = Finding.get_numerical_severity(finding.severity)
+            finding.tags = context["form"].cleaned_data['tags']
+            finding.save()
             # Save and add new endpoints
-            finding_helper.add_endpoints(new_finding, form)
+            finding_helper.add_endpoints(finding, context["form"])
+            # Save the finding at the end and return
+            finding.save()
 
-            new_finding.save()
-            # Push to jira?
-            push_to_jira = False
+            return finding, request, True
+        else:
+            add_error_message_to_response("The form has errors, please correct them below.")
+            add_field_errors_to_response(context["form"])
+
+        return finding, request, False
+
+    def process_jira_form(self, request: HttpRequest, finding: Finding, context: dict):
+        # Capture case if the jira not being enabled
+        if context["jform"] is None:
+            return request, True, False
+
+        if context["jform"] and context["jform"].is_valid():
+            # Push to Jira?
+            logger.debug('jira form valid')
+            push_to_jira = jira_helper.is_push_all_issues(finding) or context["jform"].cleaned_data.get('push_to_jira')
             jira_message = None
-            if jform and jform.is_valid():
-                # Push to Jira?
-                logger.debug('jira form valid')
-                push_to_jira = push_all_jira_issues or jform.cleaned_data.get('push_to_jira')
+            # if the jira issue key was changed, update database
+            new_jira_issue_key = context["jform"].cleaned_data.get('jira_issue')
+            if finding.has_jira_issue:
+                jira_issue = finding.jira_issue
+                # everything in DD around JIRA integration is based on the internal id of the issue in JIRA
+                # instead of on the public jira issue key.
+                # I have no idea why, but it means we have to retrieve the issue from JIRA to get the internal JIRA id.
+                # we can assume the issue exist, which is already checked in the validation of the jform
+                if not new_jira_issue_key:
+                    jira_helper.finding_unlink_jira(request, finding)
+                    jira_message = 'Link to JIRA issue removed successfully.'
 
-                # if the jira issue key was changed, update database
-                new_jira_issue_key = jform.cleaned_data.get('jira_issue')
-                if new_finding.has_jira_issue:
-                    jira_issue = new_finding.jira_issue
+                elif new_jira_issue_key != finding.jira_issue.jira_key:
+                    jira_helper.finding_unlink_jira(request, finding)
+                    jira_helper.finding_link_jira(request, finding, new_jira_issue_key)
+                    jira_message = 'Changed JIRA link successfully.'
+            else:
+                logger.debug('finding has no jira issue yet')
+                if new_jira_issue_key:
+                    logger.debug(
+                        'finding has no jira issue yet, but jira issue specified in request. trying to link.')
+                    jira_helper.finding_link_jira(request, finding, new_jira_issue_key)
+                    jira_message = 'Linked a JIRA issue successfully.'
+            # Determine if a message should be added
+            if jira_message:
+                messages.add_message(
+                    request, messages.SUCCESS, jira_message, extra_tags="alert-success"
+                )
 
-                    # everything in DD around JIRA integration is based on the internal id of the issue in JIRA
-                    # instead of on the public jira issue key.
-                    # I have no idea why, but it means we have to retrieve the issue from JIRA to get the internal JIRA id.
-                    # we can assume the issue exist, which is already checked in the validation of the jform
+            return request, True, push_to_jira
+        else:
+            add_field_errors_to_response(context["jform"])
 
-                    if not new_jira_issue_key:
-                        jira_helper.finding_unlink_jira(request, new_finding)
-                        jira_message = 'Link to JIRA issue removed successfully.'
+        return request, False, False
 
-                    elif new_jira_issue_key != new_finding.jira_issue.jira_key:
-                        jira_helper.finding_unlink_jira(request, new_finding)
-                        jira_helper.finding_link_jira(request, new_finding, new_jira_issue_key)
-                        jira_message = 'Changed JIRA link successfully.'
-                else:
-                    logger.debug('finding has no jira issue yet')
-                    if new_jira_issue_key:
-                        logger.debug(
-                            'finding has no jira issue yet, but jira issue specified in request. trying to link.')
-                        jira_helper.finding_link_jira(request, new_finding, new_jira_issue_key)
-                        jira_message = 'Linked a JIRA issue successfully.'
+    def process_github_form(self, request: HttpRequest, finding: Finding, context: dict):
+        if "githubform-push_to_github" not in request.POST:
+            return request, True
 
-            if 'githubform-push_to_github' in request.POST:
-                gform = GITHUBFindingForm(request.POST, prefix='jiragithub', enabled=push_all_jira_issues)
-                if gform.is_valid():
-                    add_external_issue(new_finding, 'github')
+        if context["gform"].is_valid():
+            add_external_issue(finding, 'github')
 
-            finding_helper.save_vulnerability_ids(new_finding, form.cleaned_data['vulnerability_ids'].split())
+            return request, True
+        else:
+            add_field_errors_to_response(context["gform"])
 
-            new_finding.save(push_to_jira=push_to_jira)
+        return request, False
 
-            if 'request' in form.cleaned_data or 'response' in form.cleaned_data:
+    def process_forms(self, request: HttpRequest, test: Test, context: dict):
+        form_success_list = []
+        # Set vars for the completed forms
+        # Validate finding mitigation
+        request = self.validate_status_change(request, context)
+        # Check the validity of the form overall
+        finding, request, success = self.process_finding_form(request, test, context)
+        form_success_list.append(success)
+        request, success, push_to_jira = self.process_jira_form(request, finding, context)
+        form_success_list.append(success)
+        request, success = self.process_github_form(request, finding, context)
+        form_success_list.append(success)
+        # Determine if all forms were successful
+        all_forms_valid = all(form_success_list)
+        # Check the validity of all the forms
+        if all_forms_valid:
+            # if we're removing the "duplicate" in the edit finding screen
+            finding_helper.save_vulnerability_ids(finding, context["form"].cleaned_data["vulnerability_ids"].split())
+            # Push things to jira if needed
+            finding.save(push_to_jira=push_to_jira)
+            # Save the burp req resp
+            if "request" in context["form"].cleaned_data or "response" in context["form"].cleaned_data:
                 burp_rr = BurpRawRequestResponse(
-                    finding=new_finding,
-                    burpRequestBase64=base64.b64encode(form.cleaned_data['request'].encode()),
-                    burpResponseBase64=base64.b64encode(form.cleaned_data['response'].encode()),
+                    finding=finding,
+                    burpRequestBase64=base64.b64encode(context["form"].cleaned_data["request"].encode()),
+                    burpResponseBase64=base64.b64encode(context["form"].cleaned_data["response"].encode()),
                 )
                 burp_rr.clean()
                 burp_rr.save()
+            # Add a success message
+            messages.add_message(
+                request,
+                messages.SUCCESS,
+                _('Finding added successfully.'),
+                extra_tags='alert-success')
 
-            messages.add_message(request,
-                                 messages.SUCCESS,
-                                 _('Finding added successfully.'),
-                                 extra_tags='alert-success')
+        return finding, request, all_forms_valid
 
+    def get_template(self):
+        return "dojo/ad_hoc_findings.html"
+
+    def get(self, request: HttpRequest, product_id: int):
+        # Get the initial objects
+        product = self.get_product(product_id)
+        # Make sure the user is authorized
+        user_has_permission_or_403(request.user, product, Permissions.Finding_Add)
+        # Create the necessary nested objects
+        test = self.create_nested_objects(product)
+        # Set up the initial context
+        context = self.get_initial_context(request, test)
+        # Render the form
+        return render(request, self.get_template(), context)
+
+    def post(self, request: HttpRequest, product_id: int):
+        # Get the initial objects
+        product = self.get_product(product_id)
+        # Make sure the user is authorized
+        user_has_permission_or_403(request.user, product, Permissions.Finding_Add)
+        # Create the necessary nested objects
+        test = self.create_nested_objects(product)
+        # Set up the initial context
+        context = self.get_initial_context(request, test)
+        # Process the form
+        _, request, success = self.process_forms(request, test, context)
+        # Handle the case of a successful form
+        if success:
             if '_Finished' in request.POST:
                 return HttpResponseRedirect(reverse('view_test', args=(test.id,)))
             else:
                 return HttpResponseRedirect(reverse('add_findings', args=(test.id,)))
         else:
-            form_error = True
-            add_error_message_to_response(_('The form has errors, please correct them below.'))
-            add_field_errors_to_response(jform)
-            add_field_errors_to_response(form)
-
-    else:
-        if use_jira:
-            jform = JIRAFindingForm(push_all=jira_helper.is_push_all_issues(test), prefix='jiraform',
-                                    jira_project=jira_helper.get_jira_project(test), finding_form=form)
-
-        if get_system_setting('enable_github'):
-            if GITHUB_PKey.objects.filter(product=test.engagement.product).count() != 0:
-                gform = GITHUBFindingForm(enabled=push_all_jira_issues, prefix='githubform')
-        else:
-            gform = None
-
-    product_tab = Product_Tab(prod, title=_("Add Finding"), tab="engagements")
-    product_tab.setEngagement(eng)
-    return render(request, 'dojo/ad_hoc_findings.html',
-                  {'form': form,
-                   'product_tab': product_tab,
-                   'temp': False,
-                   'tid': test.id,
-                   'pid': pid,
-                   'form_error': form_error,
-                   'jform': jform,
-                   'gform': gform,
-                   })
+            context["form_error"] = True
+        # Render the form
+        return render(request, self.get_template(), context)
 
 
 @user_is_authorized(Product, Permissions.Product_View, 'pid')
@@ -1572,6 +1749,7 @@ def add_api_scan_configuration(request, pid):
                   {'form': form,
                    'product_tab': product_tab,
                    'product': product,
+                   'api_scan_configuration_hints': get_api_scan_configuration_hints(),
                    })
 
 
@@ -1630,7 +1808,8 @@ def edit_api_scan_configuration(request, pid, pascid):
                   'dojo/edit_product_api_scan_configuration.html',
                   {
                       'form': form,
-                      'product_tab': product_tab
+                      'product_tab': product_tab,
+                      'api_scan_configuration_hints': get_api_scan_configuration_hints(),
                   })
 
 

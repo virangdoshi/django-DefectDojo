@@ -28,6 +28,19 @@ class TestSarifParser(DojoTestCase):
         for finding in findings:
             self.common_checks(finding)
 
+    def test_suppression_report(self):
+        """test report file having different suppression definitions"""
+        testfile = open(path.join(path.dirname(__file__), "../scans/sarif/suppression_test.sarif"))
+        parser = SarifParser()
+        findings = parser.get_findings(testfile, Test())
+        for finding in findings:
+            if finding.title == "Suppressed":
+                self.assertEqual(True, finding.false_p)
+                self.assertEqual(False, finding.active)
+            else:
+                self.assertEqual(False, finding.false_p)
+                self.assertEqual(True, finding.active)
+
     def test_example2_report(self):
         testfile = open(path.join(path.dirname(__file__), "../scans/sarif/appendix_k.sarif"))
         parser = SarifParser()
@@ -44,9 +57,11 @@ class TestSarifParser(DojoTestCase):
 **Rule short description:** A variable was used without being initialized.
 **Rule full description:** A variable was used without being initialized. This can result in runtime errors such as null reference exceptions.
 **Code flow:**
-\tcollections/list.h:15\t-\tint *ptr;
-\tcollections/list.h:15\t-\toffset = (y + z) * q + 1;
-\tcollections/list.h:25\t-\tadd_core(ptr, offset, val)"""
+1. collections/list.h:L15\t-\tint *ptr;
+\tVariable `ptr` declared.
+2. collections/list.h:L15\t-\toffset = (y + z) * q + 1;
+3. collections/list.h:L25\t-\tadd_core(ptr, offset, val)
+\tUninitialized variable `ptr` passed to method `add_core`."""
         self.assertEqual(description, item.description)
         self.assertEqual(datetime.datetime(2016, 7, 16, 14, 19, 1, tzinfo=datetime.timezone.utc), item.date)
         for finding in findings:
@@ -69,7 +84,7 @@ class TestSarifParser(DojoTestCase):
         self.assertEqual(15, item.line)
         description = """**Result message:** Variable "count" was used without being initialized.
 **Rule full description:** A variable was used without being initialized. This can result in runtime errors such as null reference exceptions."""
-        self.assertEquals(description, item.description)
+        self.assertEqual(description, item.description)
         for finding in findings:
             self.common_checks(finding)
 
@@ -535,14 +550,21 @@ class TestSarifParser(DojoTestCase):
     def test_get_fingerprints_hashes(self):
         # example from 3.27.16 of the spec
         data = {"fingerprints": {"stableResultHash/v2": "234567900abcd", "stableResultHash/v3": "34567900abcde"}}
-        self.assertEquals(
+        self.assertEqual(
             {"stableResultHash": {"version": 3, "value": "34567900abcde"}},
             get_fingerprints_hashes(data["fingerprints"]),
         )
 
         # example than reverse the order
         data2 = {"fingerprints": {"stableResultHash/v2": "234567900abcd", "stableResultHash/v1": "34567900abcde"}}
-        self.assertEquals(
+        self.assertEqual(
             {"stableResultHash": {"version": 2, "value": "234567900abcd"}},
             get_fingerprints_hashes(data2["fingerprints"]),
         )
+
+    def test_tags_from_result_properties(self):
+        testfile = open(path.join(path.dirname(__file__), "../scans/sarif/taint-python-report.sarif"))
+        parser = SarifParser()
+        findings = parser.get_findings(testfile, Test())
+        item = findings[0]
+        self.assertEqual(["Scan"], item.tags)

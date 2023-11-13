@@ -128,8 +128,7 @@ def create_description(event, *args, **kwargs):
 
 
 def create_notification_message(event, user, notification_type, *args, **kwargs):
-    template = 'notifications/%s.tpl' % event.replace('/', '')
-    kwargs.update({'type': notification_type})
+    template = f"notifications/{notification_type}/{event.replace('/', '')}.tpl"
     kwargs.update({'user': user})
 
     notification_message = None
@@ -143,7 +142,7 @@ def create_notification_message(event, user, notification_type, *args, **kwargs)
     finally:
         if not notification_message:
             kwargs["description"] = create_description(event, *args, **kwargs)
-            notification_message = render_to_string('notifications/other.tpl', kwargs)
+            notification_message = render_to_string(f"notifications/{notification_type}/other.tpl", kwargs)
 
     return notification_message if notification_message else ''
 
@@ -269,8 +268,11 @@ def send_msteams_notification(event, user=None, *args, **kwargs):
 @app.task
 def send_mail_notification(event, user=None, *args, **kwargs):
     from dojo.utils import get_system_setting
-
-    if user:
+    email_from_address = get_system_setting('email_from')
+    # Attempt to get the "to" address
+    if "recipient" in kwargs:
+        address = kwargs.get("recipient")
+    elif user:
         address = user.email
     else:
         address = get_system_setting('mail_notifications_to')
@@ -278,26 +280,25 @@ def send_mail_notification(event, user=None, *args, **kwargs):
     logger.debug('notification email for user %s to %s', user, address)
 
     try:
-        subject = '%s notification' % get_system_setting('team_name')
+        subject = f"{get_system_setting('team_name')} notification"
         if 'title' in kwargs:
-            subject += ': %s' % kwargs['title']
+            subject += f": {kwargs['title']}"
 
         email = EmailMessage(
             subject,
             create_notification_message(event, user, 'mail', *args, **kwargs),
-            get_system_setting('email_from'),
+            email_from_address,
             [address],
-            headers={"From": "{}".format(get_system_setting('email_from'))}
+            headers={"From": f"{email_from_address}"},
         )
         email.content_subtype = 'html'
         logger.debug('sending email alert')
-        # logger.info(create_notification_message(event, 'mail'))
+        # logger.info(create_notification_message(event, user, 'mail', *args, **kwargs))
         email.send(fail_silently=False)
 
     except Exception as e:
         logger.exception(e)
         log_alert(e, "Email Notification", title=kwargs['title'], description=str(e), url=kwargs['url'])
-        pass
 
 
 def send_alert_notification(event, user=None, *args, **kwargs):
