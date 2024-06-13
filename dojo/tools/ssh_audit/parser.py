@@ -1,5 +1,6 @@
 import json
 from dojo.models import Endpoint, Finding
+import math
 
 
 class SSHAuditParser(object):
@@ -20,7 +21,7 @@ class SSHAuditParser(object):
         High 	7.0-10.0 	High 	7.0-8.9
         Critical 	9.0-10.0"""
         val = float(raw_value)
-        if val == 0.0:
+        if math.isclose(val, 0.0, rel_tol=1e-09, abs_tol=0.0):
             return "Info"
         elif val < 4.0:
             return "Low"

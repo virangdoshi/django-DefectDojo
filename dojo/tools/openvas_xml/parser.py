@@ -1,6 +1,7 @@
 from xml.dom import NamespaceErr
 from defusedxml import ElementTree as ET
 from dojo.models import Finding
+import math
 
 
 class OpenVASXMLParser(object):
@@ -15,7 +16,7 @@ class OpenVASXMLParser(object):
 
     def convert_cvss_score(self, raw_value):
         val = float(raw_value)
-        if val == 0.0:
+        if math.isclose(val, 0.0, rel_tol=1e-09, abs_tol=0.0):
             return "Info"
         elif val < 4.0:
             return "Low"
