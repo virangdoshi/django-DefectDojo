@@ -2,7 +2,7 @@ from dojo.models import Test, Finding
 from .dojo_test_case import DojoAPITestCase
 from dojo.product.helpers import propagate_tags_on_product_sync
 import logging
-import random
+import secrets
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ class TagTests(DojoAPITestCase):
 
         del finding_details['id']
 
-        finding_details['title'] = 'tags test ' + str(random.randint(1, 9999))
+        finding_details['title'] = 'tags test ' + str(secrets.SystemRandom().randint(1, 9999))
         finding_details['tags'] = tags
         response = self.post_new_finding_api(finding_details)
 
