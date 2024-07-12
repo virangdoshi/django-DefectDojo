@@ -1,14 +1,15 @@
-from django.core.exceptions import ValidationError
-from django.test import TestCase
 from unittest.mock import patch
 
+from django.core.exceptions import ValidationError
+from django.test import TestCase
+
 from dojo.models import (
-    Test,
     Engagement,
     Product,
     Product_API_Scan_Configuration,
-    Tool_Type,
+    Test,
     Tool_Configuration,
+    Tool_Type,
 )
 from dojo.tools.api_bugcrowd.importer import BugcrowdApiImporter
 
@@ -128,7 +129,7 @@ class TestBugcrowdApiImporter(TestCase):
         mock_foo.return_value = self.findings
 
         bugrcrowd_api_importer = BugcrowdApiImporter()
-        my_findings, api_scan_config = bugrcrowd_api_importer.get_findings(self.test_2)
+        my_findings, _api_scan_config = bugrcrowd_api_importer.get_findings(self.test_2)
 
         mock_foo.assert_called_with("SERVICE_KEY_1", "SERVICE_KEY_2")
         self.assertListEqual(my_findings, self.findings)

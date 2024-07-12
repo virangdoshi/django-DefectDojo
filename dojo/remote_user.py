@@ -1,10 +1,13 @@
 import logging
-from django.contrib.auth.middleware import RemoteUserMiddleware as OriginalRemoteUserMiddleware
+
+from django.conf import settings
 from django.contrib.auth.backends import RemoteUserBackend as OriginalRemoteUserBackend
+from django.contrib.auth.middleware import RemoteUserMiddleware as OriginalRemoteUserMiddleware
 from drf_spectacular.extensions import OpenApiAuthenticationExtension
-from rest_framework.authentication import RemoteUserAuthentication as OriginalRemoteUserAuthentication
 from netaddr import IPAddress
-from dojo.settings import settings
+from rest_framework.authentication import RemoteUserAuthentication as OriginalRemoteUserAuthentication
+
+from dojo.models import Dojo_Group
 from dojo.pipeline import assign_user_to_groups, cleanup_old_groups_for_user
 
 logger = logging.getLogger(__name__)
@@ -28,6 +31,9 @@ class RemoteUserAuthentication(OriginalRemoteUserAuthentication):
 
 class RemoteUserMiddleware(OriginalRemoteUserMiddleware):
     def process_request(self, request):
+        if not settings.AUTH_REMOTEUSER_ENABLED:
+            return
+
         # process only if request is comming from the trusted proxy node
         if IPAddress(request.META['REMOTE_ADDR']) in settings.AUTH_REMOTEUSER_TRUSTED_PROXY:
             self.header = settings.AUTH_REMOTEUSER_USERNAME_HEADER
@@ -74,7 +80,7 @@ class RemoteUserBackend(OriginalRemoteUserBackend):
 
         if settings.AUTH_REMOTEUSER_GROUPS_HEADER and \
           settings.AUTH_REMOTEUSER_GROUPS_HEADER in request.META:
-            assign_user_to_groups(user, request.META[settings.AUTH_REMOTEUSER_GROUPS_HEADER].split(','), 'Remote')
+            assign_user_to_groups(user, request.META[settings.AUTH_REMOTEUSER_GROUPS_HEADER].split(','), Dojo_Group.REMOTE)
 
         if settings.AUTH_REMOTEUSER_GROUPS_CLEANUP and \
           settings.AUTH_REMOTEUSER_GROUPS_HEADER and \
@@ -94,4 +100,16 @@ class RemoteUserScheme(OpenApiAuthenticationExtension):
     priority = 1
 
     def get_security_definition(self, auto_schema):
-        return settings.SWAGGER_SETTINGS['SECURITY_DEFINITIONS']['remoteUserAuth']
+        if not settings.AUTH_REMOTEUSER_VISIBLE_IN_SWAGGER:
+            return {}
+
+        header_name = settings.AUTH_REMOTEUSER_USERNAME_HEADER
+        if header_name.startswith('HTTP_'):
+            header_name = header_name[5:]
+        header_name = header_name.replace('_', '-').capitalize()
+
+        return {
+            'type': 'apiKey',
+            'in': 'header',
+            'name': header_name,
+        }

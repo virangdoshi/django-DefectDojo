@@ -10,7 +10,7 @@ from dojo.models import Endpoint, Finding, Test
 LOGGER = logging.getLogger(__name__)
 
 
-class TenableXMLParser(object):
+class TenableXMLParser:
     def get_text_severity(self, severity_id):
         """Convert data of the report into severity"""
         severity = "Info"
@@ -24,6 +24,21 @@ class TenableXMLParser(object):
             severity = "Low"
         # Ensure the severity is a valid choice. Fall back to info otherwise
         if severity not in Finding.SEVERITIES.keys():
+            severity = "Info"
+        return severity
+
+    def get_cvss_severity(self, cvss_score):
+        """Convert data of the report into severity"""
+        severity = "Info"
+        if float(cvss_score) >= 9.0:
+            severity = "Critical"
+        elif float(cvss_score) >= 7.0:
+            severity = "High"
+        elif float(cvss_score) >= 5.0:
+            severity = "Medium"
+        elif float(cvss_score) > 0.0:
+            severity = "Low"
+        else:
             severity = "Info"
         return severity
 
@@ -46,11 +61,12 @@ class TenableXMLParser(object):
         root = nscan.getroot()
 
         if "NessusClientData_v2" not in root.tag:
-            raise ValueError(
+            msg = (
                 "This version of Nessus report is not supported. "
                 "Please make sure the export is "
                 "formatted using the NessusClientData_v2 schema."
             )
+            raise ValueError(msg)
 
         dupes = {}
         for report in root.iter("Report"):
@@ -202,6 +218,10 @@ class TenableXMLParser(object):
                     )
                     if cvssv3_score_element_text is not None:
                         cvssv3_score = cvssv3_score_element_text
+
+                    cvss = self.safely_get_element_text(item.find("cvss3_base_score"))
+                    if cvss is not None:
+                        severity = self.get_cvss_severity(cvss)
 
                     # Determine the current entry has already been parsed in
                     # this report

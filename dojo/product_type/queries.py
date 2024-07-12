@@ -1,10 +1,15 @@
 from crum import get_current_user
 from django.db.models import Exists, OuterRef, Q
-from dojo.models import Product_Type, Product_Type_Member, Product_Type_Group
-from dojo.authorization.authorization import get_roles_for_permission, user_has_global_permission, user_has_permission, \
-    role_has_permission
-from dojo.group.queries import get_authorized_groups
+
+from dojo.authorization.authorization import (
+    get_roles_for_permission,
+    role_has_permission,
+    user_has_global_permission,
+    user_has_permission,
+)
 from dojo.authorization.roles_permissions import Permissions
+from dojo.group.queries import get_authorized_groups
+from dojo.models import Product_Type, Product_Type_Group, Product_Type_Member
 
 
 def get_authorized_product_types(permission):
@@ -61,13 +66,13 @@ def get_authorized_product_type_members(permission):
         return Product_Type_Member.objects.none()
 
     if user.is_superuser:
-        return Product_Type_Member.objects.all().select_related('role')
+        return Product_Type_Member.objects.all().order_by("id").select_related('role')
 
     if user_has_global_permission(user, permission):
-        return Product_Type_Member.objects.all().select_related('role')
+        return Product_Type_Member.objects.all().order_by("id").select_related('role')
 
     product_types = get_authorized_product_types(permission)
-    return Product_Type_Member.objects.filter(product_type__in=product_types).select_related('role')
+    return Product_Type_Member.objects.filter(product_type__in=product_types).order_by("id").select_related('role')
 
 
 def get_authorized_product_type_members_for_user(user, permission):
@@ -93,7 +98,7 @@ def get_authorized_product_type_groups(permission):
         return Product_Type_Group.objects.none()
 
     if user.is_superuser:
-        return Product_Type_Group.objects.all().select_related('role')
+        return Product_Type_Group.objects.all().order_by("id").select_related('role')
 
     product_types = get_authorized_product_types(permission)
-    return Product_Type_Group.objects.filter(product_type__in=product_types).select_related('role')
+    return Product_Type_Group.objects.filter(product_type__in=product_types).order_by("id").select_related('role')

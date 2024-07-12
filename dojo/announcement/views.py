@@ -1,18 +1,18 @@
 import logging
 
-from django.shortcuts import render
 from django.contrib import messages
-from django.urls import reverse
-from django.utils.translation import gettext_lazy as _
-from django.utils.translation import gettext
 from django.http import HttpResponseRedirect
-from dojo.utils import add_breadcrumb
+from django.shortcuts import render
+from django.urls import reverse
+from django.utils.translation import gettext
+from django.utils.translation import gettext_lazy as _
 
-from dojo.forms import AnnouncementCreateForm, AnnouncementRemoveForm
-from dojo.models import Announcement, UserAnnouncement, Dojo_User
 from dojo.authorization.authorization_decorators import (
     user_is_configuration_authorized,
 )
+from dojo.forms import AnnouncementCreateForm, AnnouncementRemoveForm
+from dojo.models import Announcement, UserAnnouncement
+from dojo.utils import add_breadcrumb
 
 logger = logging.getLogger(__name__)
 
@@ -50,15 +50,6 @@ def configure_announcement(request):
             announcement.style = form.cleaned_data["style"]
             announcement.dismissable = form.cleaned_data["dismissable"]
             announcement.save()
-            if created:
-                UserAnnouncement.objects.bulk_create(
-                    [
-                        UserAnnouncement(
-                            user=user_id, announcement=announcement
-                        )
-                        for user_id in Dojo_User.objects.all()
-                    ]
-                )
             messages.add_message(
                 request,
                 messages.SUCCESS,
@@ -79,7 +70,7 @@ def configure_announcement(request):
 
 def dismiss_announcement(request):
     if request.method == "POST":
-        deleted_count, objects_deleted = UserAnnouncement.objects.filter(
+        deleted_count, _objects_deleted = UserAnnouncement.objects.filter(
             user=request.user, announcement=1
         ).delete()
         if deleted_count > 0:

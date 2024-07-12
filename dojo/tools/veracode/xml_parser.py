@@ -3,14 +3,14 @@ import uuid
 from datetime import datetime
 
 from defusedxml import ElementTree
+from django.conf import settings
 
-from dojo.models import Finding
-from dojo.models import Endpoint
+from dojo.models import Endpoint, Finding
 
 XML_NAMESPACE = {"x": "https://www.veracode.com/schema/reports/export/1.0"}
 
 
-class VeracodeXMLParser(object):
+class VeracodeXMLParser:
     """This parser is written for Veracode Detailed XML reports, version 1.5.
 
     Version is annotated in the report, `detailedreport/@report_format_version`.
@@ -33,7 +33,7 @@ class VeracodeXMLParser(object):
             root.attrib["last_update_time"], "%Y-%m-%d %H:%M:%S %Z"
         )
 
-        dupes = dict()
+        dupes = {}
 
         # Get SAST findings
         # This assumes `<category/>` only exists within the `<severity/>`
@@ -51,15 +51,10 @@ class VeracodeXMLParser(object):
             )
             # Bullet list of recommendations:
             mitigation_text += "".join(
-                list(
-                    map(
-                        lambda x: "    * " + x.get("text") + "\n",
-                        category_node.findall(
+                ["    * " + x.get("text") + "\n" for x in category_node.findall(
                             "x:recommendations/x:para/x:bulletitem",
                             namespaces=XML_NAMESPACE,
-                        ),
-                    )
-                )
+                        )]
             )
 
             for flaw_node in category_node.findall(
@@ -168,13 +163,16 @@ class VeracodeXMLParser(object):
             + xml_node.attrib["issueid"]
         )
 
-        _date_found = test.target_start
-        if "date_first_occurrence" in xml_node.attrib:
-            _date_found = datetime.strptime(
-                xml_node.attrib["date_first_occurrence"],
-                "%Y-%m-%d %H:%M:%S %Z",
-            )
-        finding.date = _date_found
+        # Get the date based on the first_seen setting
+        try:
+            if settings.USE_FIRST_SEEN:
+                if date := xml_node.get("date_first_occurrence", None):
+                    finding.date = datetime.strptime(date, "%Y-%m-%d %H:%M:%S %Z")
+            else:
+                if date := xml_node.get("date_last_occurrence", None):
+                    finding.date = datetime.strptime(date, "%Y-%m-%d %H:%M:%S %Z")
+        except Exception:
+            finding.date = test.target_start
 
         _is_mitigated = False
         _mitigated_date = None
@@ -295,9 +293,7 @@ class VeracodeXMLParser(object):
         finding.severity = cls.__xml_flaw_to_severity(xml_node)
         finding.unsaved_vulnerability_ids = [xml_node.attrib["cve_id"]]
         finding.cwe = cls._get_cwe(xml_node.attrib["cwe_id"])
-        finding.title = "Vulnerable component: {0}:{1}".format(
-            library, version
-        )
+        finding.title = f"Vulnerable component: {library}:{version}"
         finding.component_name = library
         finding.component_version = version
 
@@ -307,9 +303,9 @@ class VeracodeXMLParser(object):
 
         _description = "This library has known vulnerabilities.\n"
         _description += (
-            "**CVE:** {0} ({1})\n"
-            "CVS Score: {2} ({3})\n"
-            "Summary: \n>{4}"
+            "**CVE:** {} ({})\n"
+            "CVS Score: {} ({})\n"
+            "Summary: \n>{}"
             "\n\n-----\n\n".format(
                 xml_node.attrib["cve_id"],
                 xml_node.attrib.get("first_found_date"),

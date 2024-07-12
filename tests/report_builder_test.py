@@ -1,13 +1,13 @@
-from selenium.webdriver.support.ui import Select
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-import unittest
-import sys
 import os
+import sys
+import unittest
+
 from base_test_class import BaseTestCase
 from product_test import ProductTest
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import Select, WebDriverWait
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -31,7 +31,7 @@ class ReportBuilderTest(BaseTestCase):
                 for field in inputs:
                     field.send_keys('cover words')
             if 'wysiwyg-content' in class_names:
-                content = widget.find_element(By.CLASS_NAME, "editor").send_keys('wysiwyg')
+                widget.find_element(By.CLASS_NAME, "editor").send_keys('wysiwyg')
 
     def generate_HTML_report(self):
         driver = self.driver

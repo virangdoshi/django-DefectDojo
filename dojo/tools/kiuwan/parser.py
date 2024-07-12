@@ -25,7 +25,7 @@ class Severityfilter:
             self.severity = "Info"
 
 
-class KiuwanParser(object):
+class KiuwanParser:
     def get_scan_types(self):
         return ["Kiuwan Scan"]
 
@@ -47,7 +47,7 @@ class KiuwanParser(object):
         for row in reader:
             csvarray.append(row)
 
-        dupes = dict()
+        dupes = {}
         for row in csvarray:
             finding = Finding(test=test)
             findingdict = {}
@@ -58,11 +58,17 @@ class KiuwanParser(object):
             findingdict["file"] = row["File"]
             findingdict["line_number"] = row["Line number"]
             findingdict["description"] = (
-                "**Vulnerability type** : "
+                "**Software characteristic** : "
                 + row["Software characteristic"]
+                + "\n\n"
+                + "**Vulnerability type** : "
+                + (row["Vulnerability type"] if "Vulnerability type" in row else "")
                 + "\n\n"
                 + "**CWE Scope** : "
                 + row["CWE Scope"]
+                + "\n\n"
+                + "**File** : "
+                + row["File"]
                 + "\n\n"
                 + "**Line number** : "
                 + row["Line number"]
@@ -116,6 +122,8 @@ class KiuwanParser(object):
                         + finding.title
                         + "|"
                         + finding.description
+                        + "|"
+                        + str(finding.cwe)
                     ).encode("utf-8")
                 ).hexdigest()
 

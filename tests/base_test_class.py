@@ -1,12 +1,13 @@
+import os
+import re
+import unittest
+
 from selenium import webdriver
+from selenium.common.exceptions import NoAlertPresentException, NoSuchElementException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import NoAlertPresentException, NoSuchElementException
-import unittest
-import os
-import re
 
 # import time
 
@@ -20,13 +21,13 @@ def on_exception_html_source_logger(func):
         try:
             return func(self, *args, **kwargs)
 
-        except Exception as e:
+        except Exception:
             print("exception occured at url:", self.driver.current_url)
             print("page source:", self.driver.page_source)
             f = open("selenium_page_source.html", "w", encoding="utf-8")
             f.writelines(self.driver.page_source)
             # time.sleep(30)
-            raise (e)
+            raise
 
     return wrapper
 
@@ -90,6 +91,14 @@ class BaseTestCase(unittest.TestCase):
             print(
                 "starting chromedriver with options: ", vars(dd_driver_options), desired
             )
+
+            # TODO - this filter needs to be removed
+            import warnings
+            warnings.filterwarnings("ignore", message="executable_path has been deprecated, please pass in a Service object")
+            warnings.filterwarnings("ignore", message="use options instead of chrome_options")
+            warnings.filterwarnings("ignore", message="desired_capabilities has been deprecated, please pass in a Service object")
+            warnings.filterwarnings("ignore", message="It is deprecated to return a value that is not None from a test case")
+
             dd_driver = webdriver.Chrome(
                 os.environ["CHROMEDRIVER"],
                 chrome_options=dd_driver_options,
@@ -456,7 +465,7 @@ class BaseTestCase(unittest.TestCase):
                 dd_driver.quit()
 
 
-class WebdriverOnlyNewLogFacade(object):
+class WebdriverOnlyNewLogFacade:
 
     last_timestamp = 0
 

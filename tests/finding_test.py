@@ -1,16 +1,16 @@
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import Select, WebDriverWait
-from selenium.webdriver.common.by import By
-from selenium.common.exceptions import TimeoutException
-
-import unittest
-import sys
 import os
+import sys
+import time
+import unittest
+from pathlib import Path
+
 from base_test_class import BaseTestCase, on_exception_html_source_logger, set_suite_settings
 from product_test import ProductTest, WaitForPageLoad
+from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import Select, WebDriverWait
 from user_test import UserTest
-from pathlib import Path
-import time
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -312,7 +312,7 @@ class FindingTest(BaseTestCase):
         # Select and click on the particular finding to edit
         driver.find_element(By.LINK_TEXT, "App Vulnerable to XSS").click()
         # Get the status of the current endpoint
-        pre_status = driver.find_element(By.XPATH, '//*[@id="vuln_endpoints"]/tbody/tr/td[3]').text
+        driver.find_element(By.XPATH, '//*[@id="vuln_endpoints"]/tbody/tr/td[3]').text
         # Click on the 'dropdownMenu1 button'
         driver.find_element(By.ID, "dropdownMenu1").click()
         # Click on `Close Finding`
@@ -336,7 +336,7 @@ class FindingTest(BaseTestCase):
         # Select and click on the particular finding to edit
         driver.find_element(By.LINK_TEXT, "App Vulnerable to XSS").click()
         # Get the status of the current endpoint
-        pre_status = driver.find_element(By.XPATH, '//*[@id="vuln_endpoints"]/tbody/tr/td[3]').text
+        driver.find_element(By.XPATH, '//*[@id="remd_endpoints"]/tbody/tr/td[3]').text
         # Click on the 'dropdownMenu1 button'
         driver.find_element(By.ID, "dropdownMenu1").click()
         # Click on `Close Finding`

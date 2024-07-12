@@ -1,6 +1,7 @@
-from ..dojo_test_case import DojoTestCase
-from dojo.tools.nsp.parser import NspParser
 from dojo.models import Test
+from dojo.tools.nsp.parser import NspParser
+
+from ..dojo_test_case import DojoTestCase
 
 
 class TestNspParser(DojoTestCase):
@@ -27,12 +28,12 @@ class TestNspParser(DojoTestCase):
                 codeExec += 1
             elif finding.title.startswith("Regular Expression Denial of Service"):
                 self.assertEqual(findings[0].severity, "High")
-                self.assertTrue(
-                    finding.references == "https://nodesecurity.io/advisories/106" or
-                    finding.references == "https://nodesecurity.io/advisories/526" or
-                    finding.references == "https://nodesecurity.io/advisories/534" or
-                    finding.references == "https://nodesecurity.io/advisories/535"
-                )
+                self.assertIn(finding.references, [
+                    "https://nodesecurity.io/advisories/106",
+                    "https://nodesecurity.io/advisories/526",
+                    "https://nodesecurity.io/advisories/534",
+                    "https://nodesecurity.io/advisories/535",
+                ])
                 dos += 1
             else:
                 self.fail("Unexpected NSP finding.")

@@ -1,10 +1,11 @@
-import unittest
 import sys
-from selenium.webdriver.support.ui import Select
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
+import unittest
+
 from base_test_class import BaseTestCase
 from product_test import ProductTest, WaitForPageLoad
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import Select
 
 
 class FalsePositiveHistoryTest(BaseTestCase):
@@ -96,7 +97,6 @@ class FalsePositiveHistoryTest(BaseTestCase):
         driver.find_element(By.CSS_SELECTOR, "input[type='submit']").click()
 
     def test_retroactive_edit_finding(self):
-        driver = self.driver
         # Create two equal findings on different engagements
         finding_1 = self.create_finding(
             product_name='QA Test',
@@ -125,7 +125,6 @@ class FalsePositiveHistoryTest(BaseTestCase):
         self.assert_is_active(finding_2)
 
     def test_retroactive_bulk_edit_finding(self):
-        driver = self.driver
         # Create two equal findings on different engagements
         finding_1 = self.create_finding(
             product_name='QA Test',

@@ -1,7 +1,8 @@
-from .dojo_test_case import DojoTestCase
-from dojo.tools.factory import get_api_scan_configuration_hints, PARSERS
-from dojo.tool_config.factory import SCAN_APIS
 from dojo.models import Tool_Configuration, Tool_Type
+from dojo.tool_config.factory import SCAN_APIS
+from dojo.tools.factory import PARSERS, get_api_scan_configuration_hints
+
+from .dojo_test_case import DojoTestCase
 
 
 class TestApiScanConfigEntry(DojoTestCase):
@@ -36,7 +37,7 @@ class TestApiScanConfigEntry(DojoTestCase):
         with self.subTest('Edgescan'):
             self.assertEqual(acsh[i]['name'], 'Edgescan Scan')
             self.assertEqual(acsh[i]['tool_type_name'], 'Edgescan')
-            self.assertEqual(acsh[i]['hint'], 'the field <b>Service key 1</b> has to be set with the Edgescan asset id.')
+            self.assertEqual(acsh[i]['hint'], 'In the field <b>Service key 1</b>, provide the Edgescan asset ID(s). Leaving it blank will import all assets\' findings.')
 
         i += 1
         with self.subTest('SonarQube'):

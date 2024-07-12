@@ -1,13 +1,16 @@
-from .dojo_test_case import DojoTestCase
-from dojo.models import Finding, Test, Vulnerability_Id, Finding_Template, Vulnerability_Id_Template
-from django.contrib.auth.models import User
+import datetime
+import logging
 from unittest import mock
 from unittest.mock import patch
+
 from crum import impersonate
-import datetime
+from django.contrib.auth.models import User
 from django.utils import timezone
-import logging
+
 from dojo.finding.helper import save_vulnerability_ids, save_vulnerability_ids_template
+from dojo.models import Finding, Finding_Template, Test, Vulnerability_Id, Vulnerability_Id_Template
+
+from .dojo_test_case import DojoTestCase
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +96,7 @@ class TestUpdateFindingStatusSignal(DojoTestCase):
     def test_mark_old_active_as_mitigated_custom_edit(self, mock_can_edit, mock_tz):
         mock_tz.return_value = frozen_datetime
 
-        custom_mitigated = datetime.datetime.now()
+        custom_mitigated = datetime.datetime.now(datetime.timezone.utc)
 
         with impersonate(self.user_1):
             test = Test.objects.last()
@@ -115,7 +118,7 @@ class TestUpdateFindingStatusSignal(DojoTestCase):
     def test_update_old_mitigated_with_custom_edit(self, mock_can_edit, mock_tz):
         mock_tz.return_value = frozen_datetime
 
-        custom_mitigated = datetime.datetime.now()
+        custom_mitigated = datetime.datetime.now(datetime.timezone.utc)
 
         with impersonate(self.user_1):
             test = Test.objects.last()
@@ -137,7 +140,7 @@ class TestUpdateFindingStatusSignal(DojoTestCase):
     def test_update_old_mitigated_with_missing_data(self, mock_can_edit, mock_tz):
         mock_tz.return_value = frozen_datetime
 
-        custom_mitigated = datetime.datetime.now()
+        custom_mitigated = datetime.datetime.now(datetime.timezone.utc)
 
         with impersonate(self.user_1):
             test = Test.objects.last()

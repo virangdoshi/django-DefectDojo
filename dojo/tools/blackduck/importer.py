@@ -32,8 +32,8 @@ class BlackduckImporter(Importer):
         If passed in a regular security.csv, process it.
         No file information then.
         """
-        security_issues = dict()
-        with open(str(report), "r") as f:
+        security_issues = {}
+        with open(str(report)) as f:
             security_issues = self.__partition_by_key(f)
 
         project_ids = set(security_issues.keys())
@@ -46,8 +46,8 @@ class BlackduckImporter(Importer):
         Will take a zip file, look for security.csv and files.csv and union them on project id.
         This allows to have the file component for a vulnerability.
         """
-        files = dict()
-        security_issues = dict()
+        files = {}
+        security_issues = {}
 
         with zipfile.ZipFile(str(report)) as zip:
             for full_file_name in zip.namelist():
@@ -80,7 +80,7 @@ class BlackduckImporter(Importer):
                     path = file_entry_dict.get("Path")
                     archive_context = file_entry_dict.get("Archive context")
                     if archive_context:
-                        full_path = "{}{}".format(archive_context, path[1:])
+                        full_path = f"{archive_context}{path[1:]}"
                     else:
                         full_path = path
 
@@ -106,8 +106,8 @@ class BlackduckImporter(Importer):
                     security_issue_dict.get("Description"),
                     security_issue_dict.get("Security Risk"),
                     security_issue_dict.get("Impact"),
-                    security_issue_dict.get("Project name"),
-                    security_issue_dict.get("Version"),
+                    security_issue_dict.get("Component name") or security_issue_dict.get("Project name"),
+                    security_issue_dict.get("Component version name") or security_issue_dict.get("Version"),
                     security_issue_dict.get("Vulnerability source"),
                     security_issue_dict.get("URL"),
                     security_issue_dict.get("Channel version origin id"),

@@ -1,6 +1,7 @@
-from ..dojo_test_case import DojoTestCase
 from dojo.models import Test
 from dojo.tools.snyk.parser import SnykParser
+
+from ..dojo_test_case import DojoTestCase
 
 
 class TestSnykParser(DojoTestCase):
@@ -70,18 +71,18 @@ class TestSnykParser(DojoTestCase):
         self.assertEqual(611, finding.cwe)
         self.assertEqual("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:L", finding.cvssv3)
         self.assertEqual(
-            "## Remediation\nUpgrade `org.apache.santuario:xmlsec` to version 2.1.4 or higher.\n\n" +
-            "Upgrade Location: pom.xml\n" +
-            "Upgrade from org.apache.santuario:xmlsec@2.1.1 to org.apache.santuario:xmlsec@2.1.4 to fix this issue, as well as updating the following:\n - org.apache.santuario:xmlsec@2.1.1",
+            "## Remediation\nUpgrade `org.apache.santuario:xmlsec` to version 2.1.4 or higher.\n\n"
+            + "Upgrade Location: pom.xml\n"
+            + "Upgrade from org.apache.santuario:xmlsec@2.1.1 to org.apache.santuario:xmlsec@2.1.4 to fix this issue, as well as updating the following:\n - org.apache.santuario:xmlsec@2.1.1",
             finding.mitigation,
         )
         self.assertEqual(
-            "**SNYK ID**: https://app.snyk.io/vuln/SNYK-JAVA-ORGAPACHESANTUARIO-460281\n\n**GitHub " +
-            "Commit**: https://github.com/apache/santuario-java/commit/52ae824cf5f5c873a0e37bb33fedcc3b387" +
-            "cdba6\n**GitHub Commit**: https://github.com/apache/santuario-java/commit/c5210f77a77105fba81" +
-            "311d16c07ceacc21f39d5\n**Possible Jira Issue**: https://issues.apache.org/jira/browse/SANTUARIO-" +
-            "504?jql=project%20%3D%20SANTUARIO\n**Security Release**: http://santuario.apache.org/secadv.data/" +
-            "CVE-2019-12400.asc?version=1&modificationDate=1566573083000&api=v2\n",
+            "**SNYK ID**: https://app.snyk.io/vuln/SNYK-JAVA-ORGAPACHESANTUARIO-460281\n\n**GitHub "
+            + "Commit**: https://github.com/apache/santuario-java/commit/52ae824cf5f5c873a0e37bb33fedcc3b387"
+            + "cdba6\n**GitHub Commit**: https://github.com/apache/santuario-java/commit/c5210f77a77105fba81"
+            + "311d16c07ceacc21f39d5\n**Possible Jira Issue**: https://issues.apache.org/jira/browse/SANTUARIO-"
+            + "504?jql=project%20%3D%20SANTUARIO\n**Security Release**: http://santuario.apache.org/secadv.data/"
+            + "CVE-2019-12400.asc?version=1&modificationDate=1566573083000&api=v2\n",
             finding.references,
         )
         self.assertEqual(
@@ -163,13 +164,34 @@ class TestSnykParser(DojoTestCase):
         with open("unittests/scans/snyk/single_project_upgrade_libs.json") as testfile:
             parser = SnykParser()
             findings = parser.get_findings(testfile, Test())
-            for index in range(len(findings)):
-                print(index, findings[index], findings[index].unsaved_tags)
             self.assertEqual(254, len(findings))
             # acme-review@1.0.0: Remote Code Execution (RCE)
             finding = findings[227]
-            print(finding, finding.severity, finding.unsaved_tags)
             self.assertEqual("High", finding.severity)
             self.assertIn('target_file:package-lock.json', finding.unsaved_tags)
             self.assertIn('upgrade_to:react-scripts@5.0.0', finding.unsaved_tags)
             self.assertIn('shell-quote@1.7.2', finding.mitigation)
+
+    def test_snykcontainer_issue_9270(self):
+        with open("unittests/scans/snyk/snykcontainer_issue_9270.json") as testfile:
+            parser = SnykParser()
+            findings = parser.get_findings(testfile, Test())
+            self.assertEqual(25, len(findings))
+
+    def test_snykcode_issue_9270(self):
+        with open("unittests/scans/snyk/snykcode_issue_9270.json") as testfile:
+            parser = SnykParser()
+            findings = parser.get_findings(testfile, Test())
+            self.assertEqual(39, len(findings))
+
+    def test_snykcode_issue_9270_epss(self):
+        with open("unittests/scans/snyk/snykcontainer_issue_epss.json") as testfile:
+            parser = SnykParser()
+            findings = parser.get_findings(testfile, Test())
+            self.assertEqual(1, len(findings))
+            self.assertEqual(0.00046, float(findings[0].epss_score))
+            self.assertEqual(0.14414, float(findings[0].epss_percentile))
+            self.assertEqual(
+                "docker-image|sarim04/juiceshop@latest: CVE-2023-4039",
+                findings[0].title,
+            )

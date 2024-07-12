@@ -1,27 +1,28 @@
+import datetime
+import logging
 from itertools import chain
+
+import bleach
+import dateutil.relativedelta
+import git
+import markdown
 from django import template
+from django.conf import settings
+from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
+from django.db.models import Case, IntegerField, Sum, Value, When
 from django.template.defaultfilters import stringfilter
+from django.urls import reverse
 from django.utils import timezone
-from django.utils.html import escape, conditional_escape
-from django.utils.safestring import mark_safe, SafeData
+from django.utils.html import conditional_escape, escape
+from django.utils.safestring import SafeData, mark_safe
 from django.utils.text import normalize_newlines
 from django.utils.translation import gettext as _
-from django.urls import reverse
-from django.contrib.auth.models import User
 
-from dojo.utils import prepare_for_view, get_system_setting, get_full_url, get_file_images
-import dojo.utils
-from dojo.models import Check_List, FileAccessToken, Finding, System_Settings, Product, Dojo_User, Benchmark_Product
-import markdown
-from django.db.models import Sum, Case, When, IntegerField, Value
-import dateutil.relativedelta
-import datetime
-import bleach
-import git
-from django.conf import settings
 import dojo.jira_link.helper as jira_helper
-import logging
+import dojo.utils
+from dojo.models import Benchmark_Product, Check_List, Dojo_User, FileAccessToken, Finding, Product, System_Settings
+from dojo.utils import get_file_images, get_full_url, get_system_setting, prepare_for_view
 
 logger = logging.getLogger(__name__)
 
@@ -87,13 +88,21 @@ def markdown_render(value):
         return mark_safe(bleach.clean(markdown_text, tags=markdown_tags, attributes=markdown_attrs, css_sanitizer=markdown_styles))
 
 
-@register.filter(name='url_shortner')
-def url_shortner(value):
+def text_shortener(value, length):
     return_value = str(value)
-    if len(return_value) > 50:
-        return_value = "..." + return_value[-47:]
-
+    if len(return_value) > length:
+        return_value = return_value[:length] + "..."
     return return_value
+
+
+@register.filter(name='url_shortener')
+def url_shortener(value):
+    return text_shortener(value, 80)
+
+
+@register.filter(name='breadcrumb_shortener')
+def breadcrumb_shortener(value):
+    return text_shortener(value, 15)
 
 
 @register.filter(name='get_pwd')
@@ -127,7 +136,7 @@ def dojo_version():
     version = __version__
     if settings.FOOTER_VERSION:
         version = settings.FOOTER_VERSION
-    return "v. {}".format(version)
+    return f"v. {version}"
 
 
 @register.simple_tag
@@ -181,6 +190,14 @@ def percentage(fraction, value):
     return return_value
 
 
+@register.filter
+def format_epss(value):
+    try:
+        return f'{value:.2%}'
+    except (ValueError, TypeError):
+        return 'N.A.'
+
+
 def asvs_calc_level(benchmark_score):
     total = 0
     total_pass = 0
@@ -213,7 +230,7 @@ def asvs_calc_level(benchmark_score):
 
 @register.filter
 def asvs_level(benchmark_score):
-    benchmark_score.desired_level, total, total_pass, total_wait, total_fail, total_viewed = asvs_calc_level(benchmark_score)
+    benchmark_score.desired_level, total, _total_pass, _total_wait, _total_fail, total_viewed = asvs_calc_level(benchmark_score)
 
     level = percentage(total_viewed, total)
 
@@ -252,10 +269,13 @@ def finding_sla(finding):
     if not get_system_setting('enable_finding_sla'):
         return ""
 
+    sla_age, enforce_sla = finding.get_sla_period()
+    if not enforce_sla:
+        return ""
+
     title = ""
     severity = finding.severity
     find_sla = finding.sla_days_remaining()
-    sla_age = getattr(finding.get_sla_periods(), severity.lower(), None)
     if finding.mitigated:
         status = "blue"
         status_text = 'Remediated within SLA for ' + severity.lower() + ' findings (' + str(sla_age) + ' days since ' + finding.get_sla_start_date().strftime("%b %d, %Y") + ')'
@@ -332,9 +352,8 @@ def datediff_time(date1, date2):
     date_str = ""
     diff = dateutil.relativedelta.relativedelta(date2, date1)
     attrs = ['years', 'months', 'days']
-    human_readable = lambda delta: ['%d %s' % (getattr(delta, attr), getattr(delta, attr) > 1 and attr or attr[:-1])
-                                    for attr in attrs if getattr(delta, attr)]
-    human_date = human_readable(diff)
+    human_date = ['%d %s' % (getattr(diff, attr), getattr(diff, attr) > 1 and attr or attr[:-1])
+                                    for attr in attrs if getattr(diff, attr)]
     for date_part in human_date:
         date_str = date_str + date_part + " "
 
@@ -403,8 +422,8 @@ def colgroup(parser, token):
         _, iterable, _, num_cols, _, _, varname = token.split_contents()
         num_cols = int(num_cols)
     except ValueError:
-        raise template.TemplateSyntaxError(
-            "Invalid arguments passed to %r." % token.contents.split()[0])
+        msg = f"Invalid arguments passed to {token.contents.split()[0]!r}."
+        raise template.TemplateSyntaxError(msg)
     return Node(iterable, num_cols, varname)
 
 
@@ -782,7 +801,7 @@ def first_vulnerability_id(finding):
 def additional_vulnerability_ids(finding):
     vulnerability_ids = finding.vulnerability_ids
     if vulnerability_ids and len(vulnerability_ids) > 1:
-        references = list()
+        references = []
         for vulnerability_id in vulnerability_ids[1:]:
             references.append(vulnerability_id)
         return references
@@ -890,7 +909,8 @@ def jira_project_tag(product_or_engagement, autoescape=True):
     if autoescape:
         esc = conditional_escape
     else:
-        esc = lambda x: x
+        def esc(x):
+            return x
 
     jira_project = jira_helper.get_jira_project(product_or_engagement)
 
@@ -947,7 +967,8 @@ def import_settings_tag(test_import, autoescape=True):
     if autoescape:
         esc = conditional_escape
     else:
-        esc = lambda x: x
+        def esc(x):
+            return x
 
     html = """
 
@@ -986,9 +1007,9 @@ def import_history(finding, autoescape=True):
         return ''
 
     if autoescape:
-        esc = conditional_escape
+        conditional_escape
     else:
-        esc = lambda x: x
+        lambda x: x
 
     # prefetched, so no filtering here
     status_changes = finding.test_import_finding_action_set.all()

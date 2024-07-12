@@ -1,9 +1,12 @@
-from .dojo_test_case import DojoTestCase
 import datetime
-from dojo.utils import set_duplicate
+import logging
+
 from dojo.management.commands.fix_loop_duplicates import fix_loop_duplicates
 from dojo.models import Finding
-import logging
+from dojo.utils import set_duplicate
+
+from .dojo_test_case import DojoTestCase
+
 logger = logging.getLogger(__name__)
 
 
@@ -14,7 +17,7 @@ class TestDuplicationReopen(DojoTestCase):
         self.finding_a = Finding.objects.get(id=2)
         self.finding_a.pk = None
         self.finding_a.duplicate = False
-        self.finding_a.mitigated = datetime.date(1970, 1, 1)
+        self.finding_a.mitigated = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
         self.finding_a.is_mitigated = True
         self.finding_a.false_p = True
         self.finding_a.active = False

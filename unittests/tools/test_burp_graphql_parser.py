@@ -1,8 +1,9 @@
 from os import path
 
-from ..dojo_test_case import DojoTestCase
 from dojo.models import Test
 from dojo.tools.burp_graphql.parser import BurpGraphQLParser
+
+from ..dojo_test_case import DojoTestCase
 
 
 class TestBurpGraphQLParser(DojoTestCase):
@@ -60,7 +61,7 @@ class TestBurpGraphQLParser(DojoTestCase):
 
             with self.assertRaises(ValueError):
                 parser = BurpGraphQLParser()
-                findings = parser.get_findings(test_file, Test())
+                parser.get_findings(test_file, Test())
 
     def test_burp_null_request_segments(self):
         with open(path.join(path.dirname(__file__), "../scans/burp_graphql/null_request_segments.json")) as test_file:

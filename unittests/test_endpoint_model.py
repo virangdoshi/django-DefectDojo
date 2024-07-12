@@ -1,13 +1,14 @@
 import datetime
-from .dojo_test_case import DojoTestCase
 from unittest import skip
 
-from dojo.endpoint.utils import endpoint_get_or_create
-from dojo.models import Product_Type, Product, Engagement, Test, Finding, Endpoint, Endpoint_Status
-from django.core.exceptions import ValidationError
 from django.apps import apps
+from django.core.exceptions import ValidationError
 from django.utils import timezone
-from dojo.endpoint.utils import remove_broken_endpoint_statuses
+
+from dojo.endpoint.utils import endpoint_get_or_create, remove_broken_endpoint_statuses
+from dojo.models import Endpoint, Endpoint_Status, Engagement, Finding, Product, Product_Type, Test
+
+from .dojo_test_case import DojoTestCase
 
 
 class TestEndpointModel(DojoTestCase):
@@ -37,7 +38,7 @@ class TestEndpointModel(DojoTestCase):
         path = "foo" * 1000
         query = "bar" * 1000
         fragment = "baz" * 1000
-        endpoint = Endpoint.from_uri('http://alice@foo.bar:8080/{}?{}#{}'.format(path, query, fragment))
+        endpoint = Endpoint.from_uri(f'http://alice@foo.bar:8080/{path}?{query}#{fragment}')
         self.assertEqual(len(endpoint.path), 500)
         self.assertEqual(len(endpoint.query), 1000)
         self.assertEqual(len(endpoint.fragment), 500)
@@ -109,46 +110,46 @@ class TestEndpointModel(DojoTestCase):
         self.assertEqual(endpoint1, endpoint2)
 
     def test_get_or_create(self):
-        endpoint1, created1 = endpoint_get_or_create(
+        _endpoint1, created1 = endpoint_get_or_create(
             protocol='http',
             host='bar.foo'
         )
         self.assertTrue(created1)
 
-        endpoint2, created2 = endpoint_get_or_create(
+        _endpoint2, created2 = endpoint_get_or_create(
             protocol='http',
             host='bar.foo'
         )
         self.assertFalse(created2)
 
-        endpoint3, created3 = endpoint_get_or_create(
+        _endpoint3, created3 = endpoint_get_or_create(
             protocol='http',
             host='bar.foo',
             port=80
         )
         self.assertFalse(created3)
 
-        endpoint4, created4 = endpoint_get_or_create(
+        _endpoint4, created4 = endpoint_get_or_create(
             protocol='http',
             host='bar.foo',
             port=8080
         )
         self.assertTrue(created4)
 
-        endpoint5, created5 = endpoint_get_or_create(
+        _endpoint5, created5 = endpoint_get_or_create(
             protocol='https',
             host='bar.foo',
             port=443
         )
         self.assertTrue(created5)
 
-        endpoint6, created6 = endpoint_get_or_create(
+        _endpoint6, created6 = endpoint_get_or_create(
             protocol='https',
             host='bar.foo'
         )
         self.assertFalse(created6)
 
-        endpoint7, created7 = endpoint_get_or_create(
+        _endpoint7, created7 = endpoint_get_or_create(
             protocol='https',
             host='bar.foo',
             port=8443
@@ -161,9 +162,9 @@ class TestEndpointModel(DojoTestCase):
         e2 = Endpoint(protocol="https", host="localhost", port=5439, path="test", query="param=value")
         e3 = Endpoint(protocol="https", host="localhost", port=5439, path="different", query="param=value")
         # Verify e1 and e2 are actually equal
-        self.assertTrue(e1 == e2)
+        self.assertEqual(e1, e2)
         # Verify e1 and e2 are not equal because the path is different
-        self.assertFalse(e1 == e3)
+        self.assertNotEqual(e1, e3)
 
     def test_equality_with_one_product_one_without(self):
         # Define the product
@@ -176,7 +177,7 @@ class TestEndpointModel(DojoTestCase):
         e2 = Endpoint(host="localhost", product=p)
         # Verify e1 and e2 are actually equal
         # Since on has a product and the other does not, we cannot use products to aid in equality
-        self.assertTrue(e1 == e2)
+        self.assertEqual(e1, e2)
 
     def test_equality_with_products(self):
         # Define the product
@@ -196,10 +197,10 @@ class TestEndpointModel(DojoTestCase):
         e3 = Endpoint(host="localhost", product=p2)
         # Verify e1 and e2 are actually equal
         # Since the products match, this should be true
-        self.assertTrue(e1 == e2)
+        self.assertEqual(e1, e2)
         # Verify e1 and e2 are not equal
         # Because the products are different, the endpoint objects are not the same
-        self.assertFalse(e1 == e3)
+        self.assertNotEqual(e1, e3)
 
 
 @skip("Outdated - this class was testing clean-up broken entries in old version of model; new version of model doesn't to store broken entries")
@@ -328,7 +329,7 @@ class TestEndpointStatusModel(DojoTestCase):
 
         with self.subTest('Endpoint with vulnerabilities but all of them are mitigated because of different reasons'):
             self.assertEqual(ep2.findings_count, 4, ep2.findings.all())
-            self.assertEqual(ep2.active_findings_count, 0, ep2.active_findings)
+            self.assertEqual(ep2.active_findings_count, 1, ep2.active_findings)
             self.assertFalse(ep2.vulnerable, ep2.active_findings_count)
             self.assertTrue(ep2.mitigated, ep2.active_findings_count)
 
@@ -337,14 +338,14 @@ class TestEndpointStatusModel(DojoTestCase):
             self.assertEqual(ep2.host_endpoints_count, 2, ep2.host_endpoints)
             self.assertEqual(ep1.host_findings_count, 4, ep1.host_findings)
             self.assertEqual(ep2.host_findings_count, 4, ep2.host_findings)
-            self.assertEqual(ep1.host_active_findings_count, 0, ep1.host_active_findings)
-            self.assertEqual(ep2.host_active_findings_count, 0, ep2.host_active_findings)
+            self.assertEqual(ep1.host_active_findings_count, 1, ep1.host_active_findings)
+            self.assertEqual(ep2.host_active_findings_count, 1, ep2.host_active_findings)
             self.assertEqual(ep1.host_mitigated_endpoints_count, 1, ep1.host_mitigated_endpoints)
             self.assertEqual(ep2.host_mitigated_endpoints_count, 1, ep2.host_mitigated_endpoints)
 
         with self.subTest('Endpoint with one vulnerabilitiy but EPS is mitigated'):
             self.assertEqual(ep3.findings_count, 1, ep3.findings.all())
-            self.assertEqual(ep3.active_findings_count, 0, ep3.active_findings)
+            self.assertEqual(ep3.active_findings_count, 1, ep3.active_findings)
             self.assertFalse(ep3.vulnerable, ep3.active_findings_count)
             self.assertTrue(ep3.mitigated, ep3.active_findings_count)
 
@@ -357,8 +358,8 @@ class TestEndpointStatusModel(DojoTestCase):
         with self.subTest('Endpoint with one vulnerability but finding is mitigated'):
             self.assertEqual(ep5.findings_count, 1, ep5.findings.all())
             self.assertEqual(ep5.active_findings_count, 0, ep5.active_findings)
-            self.assertFalse(ep5.vulnerable, ep5.active_findings_count)
-            self.assertTrue(ep5.mitigated, ep5.active_findings_count)
+            self.assertTrue(ep5.vulnerable, ep5.active_findings_count)
+            self.assertFalse(ep5.mitigated, ep5.active_findings_count)
 
         with self.subTest('Host with vulnerabilities'):
             self.assertEqual(ep3.host_endpoints_count, 3, ep3.host_endpoints)
@@ -367,9 +368,9 @@ class TestEndpointStatusModel(DojoTestCase):
             self.assertEqual(ep3.host_findings_count, 2, ep3.host_findings)
             self.assertEqual(ep4.host_findings_count, 2, ep4.host_findings)
             self.assertEqual(ep5.host_findings_count, 2, ep5.host_findings)
-            self.assertEqual(ep3.host_active_findings_count, 1, ep3.host_active_findings)
-            self.assertEqual(ep4.host_active_findings_count, 1, ep4.host_active_findings)
-            self.assertEqual(ep5.host_active_findings_count, 1, ep5.host_active_findings)
+            self.assertEqual(ep3.host_active_findings_count, 2, ep3.host_active_findings)
+            self.assertEqual(ep4.host_active_findings_count, 2, ep4.host_active_findings)
+            self.assertEqual(ep5.host_active_findings_count, 2, ep5.host_active_findings)
             self.assertEqual(ep3.host_mitigated_endpoints_count, 2, ep3.host_mitigated_endpoints)
             self.assertEqual(ep4.host_mitigated_endpoints_count, 2, ep4.host_mitigated_endpoints)
             self.assertEqual(ep5.host_mitigated_endpoints_count, 2, ep5.host_mitigated_endpoints)

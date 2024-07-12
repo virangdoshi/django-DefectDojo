@@ -1,8 +1,9 @@
 import json
-from dojo.models import Finding, Endpoint
+
+from dojo.models import Endpoint, Finding
 
 
-class HumbleParser(object):
+class HumbleParser:
     """Humble (https://github.com/rfc-st/humble)"""
 
     def get_scan_types(self):
@@ -18,7 +19,7 @@ class HumbleParser(object):
         items = []
         try:
             data = json.load(filename)
-        except ValueError as err:
+        except ValueError:
             data = {}
         if data != {}:
             url = data['[0. Info]']['URL']

@@ -1,8 +1,9 @@
 import json
+
 from dojo.models import Endpoint, Finding
 
 
-class SSHAuditParser(object):
+class SSHAuditParser:
     def get_scan_types(self):
         return ["SSH Audit Importer"]
 
@@ -35,7 +36,7 @@ class SSHAuditParser(object):
         items = []
         try:
             data = json.load(filename)
-        except ValueError as err:
+        except ValueError:
             data = {}
         if data != {}:
             title = data['banner']['raw']
@@ -51,7 +52,7 @@ class SSHAuditParser(object):
                         severity=severity,
                         static_finding=False)
                 items.append(finding)
-                finding.unsaved_endpoints = list()
+                finding.unsaved_endpoints = []
                 endpoint = Endpoint(host=data['target'].split(':')[0], port=data['target'].split(':')[1])
                 finding.unsaved_endpoints.append(endpoint)
             for kex in data['kex']:
@@ -60,7 +61,8 @@ class SSHAuditParser(object):
                     description = [f"**Algorithm**: {kexname}"]
                     description.append(f"**Description Failure**: {kex['notes']['fail']}")
                     description.append(f"**Description Warning**: {kex['notes']['warn']}")
-                    description.append(f"**Info**: {kex['notes']['info']}")
+                    if kex['notes'].get('info'):
+                        description.append(f"**Info**: {kex['notes']['info']}")
                     severity = "High"
                     finding = Finding(title=str(title) + "_" + str(kexname),
                             test=test,
@@ -68,14 +70,15 @@ class SSHAuditParser(object):
                             severity=severity,
                             static_finding=False)
                     items.append(finding)
-                    finding.unsaved_endpoints = list()
+                    finding.unsaved_endpoints = []
                     endpoint = Endpoint(host=data['target'].split(':')[0], port=data['target'].split(':')[1])
                     finding.unsaved_endpoints.append(endpoint)
                 elif 'fail' in kex['notes']:
                     kexname = kex['algorithm']
                     description = [f"**Algorithm**: {kexname}"]
                     description.append(f"**Description Failure**: {kex['notes']['fail']}")
-                    description.append(f"**Info**: {kex['notes']['info']}")
+                    if kex['notes'].get('info'):
+                        description.append(f"**Info**: {kex['notes']['info']}")
                     severity = "High"
                     finding = Finding(title=str(title) + "_" + str(kexname),
                             test=test,
@@ -83,14 +86,15 @@ class SSHAuditParser(object):
                             severity=severity,
                             static_finding=False)
                     items.append(finding)
-                    finding.unsaved_endpoints = list()
+                    finding.unsaved_endpoints = []
                     endpoint = Endpoint(host=data['target'].split(':')[0], port=data['target'].split(':')[1])
                     finding.unsaved_endpoints.append(endpoint)
                 elif 'warn' in kex['notes']:
                     kexname = kex['algorithm']
                     description = [f"**Algorithm**: {kexname}"]
                     description.append(f"**Description Warning**: {kex['notes']['warn']}")
-                    description.append(f"**Info**: {kex['notes']['info']}")
+                    if kex['notes'].get('info'):
+                        description.append(f"**Info**: {kex['notes']['info']}")
                     severity = "Medium"
                     finding = Finding(title=str(title) + "_" + str(kexname),
                             test=test,
@@ -98,7 +102,7 @@ class SSHAuditParser(object):
                             severity=severity,
                             static_finding=False)
                     items.append(finding)
-                    finding.unsaved_endpoints = list()
+                    finding.unsaved_endpoints = []
                     endpoint = Endpoint(host=data['target'].split(':')[0], port=data['target'].split(':')[1])
                     finding.unsaved_endpoints.append(endpoint)
             for key in data['key']:
@@ -109,7 +113,8 @@ class SSHAuditParser(object):
                     description.append(f"**Description Warning**: {key['notes']['warn']}")
                     if 'keysize' in key:
                         description.append(f"**KeySize**: {key['keysize']}")
-                    description.append(f"**Info**: {key['notes']['info']}")
+                    if key['notes'].get('info'):
+                        description.append(f"**Info**: {key['notes']['info']}")
                     severity = "High"
                     finding = Finding(title=str(title) + "_" + str(keyname),
                             test=test,
@@ -117,7 +122,7 @@ class SSHAuditParser(object):
                             severity=severity,
                             static_finding=False)
                     items.append(finding)
-                    finding.unsaved_endpoints = list()
+                    finding.unsaved_endpoints = []
                     endpoint = Endpoint(host=data['target'].split(':')[0], port=data['target'].split(':')[1])
                     finding.unsaved_endpoints.append(endpoint)
                 elif 'fail' in key['notes']:
@@ -126,7 +131,8 @@ class SSHAuditParser(object):
                     description.append(f"**Description Failure**: {key['notes']['fail']}")
                     if 'keysize' in key:
                         description.append(f"**KeySize**: {key['keysize']}")
-                    description.append(f"**Info**: {key['notes']['info']}")
+                    if key['notes'].get('info'):
+                        description.append(f"**Info**: {key['notes']['info']}")
                     severity = "High"
                     finding = Finding(title=str(title) + "_" + str(keyname),
                             test=test,
@@ -134,7 +140,7 @@ class SSHAuditParser(object):
                             severity=severity,
                             static_finding=False)
                     items.append(finding)
-                    finding.unsaved_endpoints = list()
+                    finding.unsaved_endpoints = []
                     endpoint = Endpoint(host=data['target'].split(':')[0], port=data['target'].split(':')[1])
                     finding.unsaved_endpoints.append(endpoint)
                 elif 'warn' in key['notes']:
@@ -143,7 +149,8 @@ class SSHAuditParser(object):
                     description.append(f"**Description Warning**: {key['notes']['warn']}")
                     if 'keysize' in key:
                         description.append(f"**KeySize**: {key['keysize']}")
-                    description.append(f"**Info**: {key['notes']['info']}")
+                    if key['notes'].get('info'):
+                        description.append(f"**Info**: {key['notes']['info']}")
                     severity = "Medium"
                     finding = Finding(title=str(title) + "_" + str(keyname),
                             test=test,
@@ -151,7 +158,7 @@ class SSHAuditParser(object):
                             severity=severity,
                             static_finding=False)
                     items.append(finding)
-                    finding.unsaved_endpoints = list()
+                    finding.unsaved_endpoints = []
                     endpoint = Endpoint(host=data['target'].split(':')[0], port=data['target'].split(':')[1])
                     finding.unsaved_endpoints.append(endpoint)
             for mac in data['mac']:
@@ -160,7 +167,8 @@ class SSHAuditParser(object):
                     description = [f"**Algorithm**: {macname}"]
                     description.append(f"**Description Failure**: {mac['notes']['fail']}")
                     description.append(f"**Description Warning**: {mac['notes']['warn']}")
-                    description.append(f"**Info**: {mac['notes']['info']}")
+                    if mac['notes'].get('info'):
+                        description.append(f"**Info**: {mac['notes']['info']}")
                     severity = "High"
                     finding = Finding(title=str(title) + "_" + str(macname),
                             test=test,
@@ -168,14 +176,15 @@ class SSHAuditParser(object):
                             severity=severity,
                             static_finding=False)
                     items.append(finding)
-                    finding.unsaved_endpoints = list()
+                    finding.unsaved_endpoints = []
                     endpoint = Endpoint(host=data['target'].split(':')[0], port=data['target'].split(':')[1])
                     finding.unsaved_endpoints.append(endpoint)
                 elif 'fail' in mac['notes']:
                     macname = mac['algorithm']
                     description = [f"**Algorithm**: {macname}"]
                     description.append(f"**Description Failure**: {mac['notes']['fail']}")
-                    description.append(f"**Info**: {mac['notes']['info']}")
+                    if mac['notes'].get('info'):
+                        description.append(f"**Info**: {mac['notes']['info']}")
                     severity = "High"
                     finding = Finding(title=str(title) + "_" + str(macname),
                             test=test,
@@ -183,14 +192,15 @@ class SSHAuditParser(object):
                             severity=severity,
                             static_finding=False)
                     items.append(finding)
-                    finding.unsaved_endpoints = list()
+                    finding.unsaved_endpoints = []
                     endpoint = Endpoint(host=data['target'].split(':')[0], port=data['target'].split(':')[1])
                     finding.unsaved_endpoints.append(endpoint)
                 elif 'warn' in mac['notes']:
                     macname = mac['algorithm']
                     description = [f"**Algorithm**: {macname}"]
                     description.append(f"**Description Warning**: {mac['notes']['warn']}")
-                    description.append(f"**Info**: {mac['notes']['info']}")
+                    if mac['notes'].get('info'):
+                        description.append(f"**Info**: {mac['notes']['info']}")
                     severity = "Medium"
                     finding = Finding(title=str(title) + "_" + str(macname),
                             test=test,
@@ -198,7 +208,7 @@ class SSHAuditParser(object):
                             severity=severity,
                             static_finding=False)
                     items.append(finding)
-                    finding.unsaved_endpoints = list()
+                    finding.unsaved_endpoints = []
                     endpoint = Endpoint(host=data['target'].split(':')[0], port=data['target'].split(':')[1])
                     finding.unsaved_endpoints.append(endpoint)
         return items

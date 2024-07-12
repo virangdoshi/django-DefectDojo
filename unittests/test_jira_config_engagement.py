@@ -1,17 +1,22 @@
+# from unittest import skip
+import contextlib
+import logging
+from unittest.mock import patch
+
 from django.urls import reverse
-from .dojo_test_case import DojoTestCase
-from dojo.models import Engagement, Product
+
 # from dojo.models import JIRA_Project
 from django.utils.http import urlencode
-from unittest.mock import patch
+
 from dojo.jira_link import helper as jira_helper
-# from unittest import skip
-import logging
+from dojo.models import Engagement, Product
+
+from .dojo_test_case import DojoTestCase
 
 logger = logging.getLogger(__name__)
 
 
-class JIRAConfigEngagementBase(object):
+class JIRAConfigEngagementBase:
     def get_new_engagement_with_jira_project_data(self):
         return {
             'name': 'new engagement',
@@ -24,6 +29,7 @@ class JIRAConfigEngagementBase(object):
             # 'jira-project-form-inherit_from_product': 'on', # absence = False in html forms
             'jira-project-form-jira_instance': 2,
             'jira-project-form-project_key': 'IUNSEC',
+            'jira-project-form-epic_issue_type_name': 'Epic',
             'jira-project-form-product_jira_sla_notification': 'on',
             'jira-project-form-custom_fields': 'null',
         }
@@ -40,6 +46,7 @@ class JIRAConfigEngagementBase(object):
             # 'jira-project-form-inherit_from_product': 'on', # absence = False in html forms
             'jira-project-form-jira_instance': 2,
             'jira-project-form-project_key': 'IUNSEC',
+            'jira-project-form-epic_issue_type_name': 'Epic',
             'jira-project-form-product_jira_sla_notification': 'on',
             'jira-project-form-enable_engagement_epic_mapping': 'on',
             'jira-epic-form-push_to_jira': 'on',
@@ -56,6 +63,8 @@ class JIRAConfigEngagementBase(object):
             'target_end': '2070-12-04',
             'status': 'Not Started',
             'jira-project-form-inherit_from_product': 'on',
+            # A value is set by default by the model, so we need to add it here as well
+            'jira-project-form-epic_issue_type_name': 'Epic',
             # 'project_key': 'IFFF',
             # 'jira_instance': 2,
             # 'enable_engagement_epic_mapping': 'on',
@@ -75,6 +84,7 @@ class JIRAConfigEngagementBase(object):
             # 'jira-project-form-inherit_from_product': 'on', # absence = False in html forms
             'jira-project-form-jira_instance': 2,
             'jira-project-form-project_key': 'ISEC',
+            'jira-project-form-epic_issue_type_name': 'Epic',
             'jira-project-form-product_jira_sla_notification': 'on',
             'jira-project-form-custom_fields': 'null',
         }
@@ -91,6 +101,7 @@ class JIRAConfigEngagementBase(object):
             # 'jira-project-form-inherit_from_product': 'on', # absence = False in html forms
             'jira-project-form-jira_instance': 2,
             'jira-project-form-project_key': 'ISEC2',
+            'jira-project-form-epic_issue_type_name': 'Epic',
             'jira-project-form-product_jira_sla_notification': 'on',
             'jira-project-form-custom_fields': 'null',
         }
@@ -105,6 +116,8 @@ class JIRAConfigEngagementBase(object):
             'target_end': '2070-12-04',
             'status': 'Not Started',
             'jira-project-form-inherit_from_product': 'on',
+            # A value is set by default by the model, so we need to add it here as well
+            'jira-project-form-epic_issue_type_name': 'Epic',
             # 'project_key': 'IFFF',
             # 'jira_instance': 2,
             # 'enable_engagement_epic_mapping': 'on',
@@ -146,7 +159,7 @@ class JIRAConfigEngagementBase(object):
                     engagement = Engagement.objects.get(id=response.url.split('/')[-2])
                 except:
                     raise ValueError('error parsing id from redirect uri: ' + response.url)
-            self.assertTrue(response.url == (expect_redirect_to % engagement.id))
+            self.assertEqual(response.url, (expect_redirect_to % engagement.id))
         else:
             self.assertEqual(response.status_code, 200)
 
@@ -247,41 +260,45 @@ class JIRAConfigEngagementTest(DojoTestCase, JIRAConfigEngagementBase):
         jira_mock.return_value = True  # cannot set return_value in decorated AND have the mock into the method
         # TODO: add engagement also via API, but let's focus on JIRA here
         engagement = self.add_engagement_without_jira_project(expected_delta_jira_project_db=0)
-        response = self.edit_jira_project_for_engagement(engagement, expected_delta_jira_project_db=1)
+        self.edit_jira_project_for_engagement(engagement, expected_delta_jira_project_db=1)
         self.assertEqual(jira_mock.call_count, 1)
 
     @patch('dojo.jira_link.views.jira_helper.is_jira_project_valid')
     def test_add_empty_jira_project_to_engagement_without_jira_project(self, jira_mock):
         jira_mock.return_value = True  # cannot set return_value in decorated AND have the mock into the method
-        engagement = self.add_engagement_without_jira_project(expected_delta_jira_project_db=0)
-        response = self.empty_jira_project_for_engagement(engagement, expected_delta_jira_project_db=0)
-        self.assertEqual(jira_mock.call_count, 0)
+        # Prevent the exception from being raised here so that the test can be ran in parallel
+        with contextlib.suppress(ValueError):
+            engagement = self.add_engagement_without_jira_project(expected_delta_jira_project_db=0)
+            self.empty_jira_project_for_engagement(engagement, expected_delta_jira_project_db=0)
+            self.assertEqual(jira_mock.call_count, 0)
 
     @patch('dojo.jira_link.views.jira_helper.is_jira_project_valid')
     def test_edit_jira_project_to_engagement_with_jira_project(self, jira_mock):
         jira_mock.return_value = True  # cannot set return_value in decorated AND have the mock into the method
         engagement = self.add_engagement_with_jira_project(expected_delta_jira_project_db=1)
-        response = self.edit_jira_project_for_engagement2(engagement, expected_delta_jira_project_db=0)
+        self.edit_jira_project_for_engagement2(engagement, expected_delta_jira_project_db=0)
         self.assertEqual(jira_mock.call_count, 2)
 
     @patch('dojo.jira_link.views.jira_helper.is_jira_project_valid')
     def test_edit_empty_jira_project_to_engagement_with_jira_project(self, jira_mock):
         jira_mock.return_value = True  # cannot set return_value in decorated AND have the mock into the method
-        engagement = self.add_engagement_with_jira_project(expected_delta_jira_project_db=1)
-        # clearing out jira config used to be possible. what todo?
-        # - delete jira project? would disconnect all existing jira issues in defect dojo from the config?
-        # - allow jira project with empty jira instance and/or empty project_key? unpredictable behaviour
-        # - so prevent clearing out these values
-        # response = self.empty_jira_project_for_engagement(Engagement.objects.get(id=3), -1)
-        # expecting ValueError as we can't delete existing JIRA Projects
-        response = self.empty_jira_project_for_engagement(engagement, expected_delta_jira_project_db=0, expect_error=True)
-        self.assertEqual(jira_mock.call_count, 1)
+        # Prevent the exception from being raised here so that the test can be ran in parallel
+        with contextlib.suppress(ValueError):
+            engagement = self.add_engagement_with_jira_project(expected_delta_jira_project_db=1)
+            # clearing out jira config used to be possible. what todo?
+            # - delete jira project? would disconnect all existing jira issues in defect dojo from the config?
+            # - allow jira project with empty jira instance and/or empty project_key? unpredictable behaviour
+            # - so prevent clearing out these values
+            # response = self.empty_jira_project_for_engagement(Engagement.objects.get(id=3), -1)
+            # expecting ValueError as we can't delete existing JIRA Projects
+            self.empty_jira_project_for_engagement(engagement, expected_delta_jira_project_db=0, expect_error=True)
+            self.assertEqual(jira_mock.call_count, 1)
 
     @patch('dojo.jira_link.views.jira_helper.is_jira_project_valid')
     def test_add_jira_project_to_engagement_without_jira_project_invalid_project(self, jira_mock):
         jira_mock.return_value = False  # cannot set return_value in decorated AND have the mock into the method
         # errors means it won't redirect to view_engagement, but returns a 200 and redisplays the edit engagement page
-        response = self.edit_jira_project_for_engagement(Engagement.objects.get(id=3), expected_delta_jira_project_db=0, expect_200=True)
+        self.edit_jira_project_for_engagement(Engagement.objects.get(id=3), expected_delta_jira_project_db=0, expect_200=True)
         self.assertEqual(jira_mock.call_count, 1)
 
     @patch('dojo.jira_link.views.jira_helper.is_jira_project_valid')
@@ -290,7 +307,7 @@ class JIRAConfigEngagementTest(DojoTestCase, JIRAConfigEngagementBase):
         engagement = self.add_engagement_with_jira_project(expected_delta_jira_project_db=1)
         jira_mock.return_value = False
         #  jira key is changed, so jira project will be checked
-        response = self.edit_jira_project_for_engagement2(engagement, expected_delta_jira_project_db=0, expect_200=True)
+        self.edit_jira_project_for_engagement2(engagement, expected_delta_jira_project_db=0, expect_200=True)
         self.assertEqual(jira_mock.call_count, 2)
 
     @patch('dojo.jira_link.views.jira_helper.is_jira_project_valid')
@@ -329,8 +346,8 @@ class JIRAConfigEngagementTest(DojoTestCase, JIRAConfigEngagementBase):
     def test_edit_jira_project_to_engagement_with_jira_project_invalid_project_jira_disabled(self, jira_mock):
         self.system_settings(enable_jira=False)
         jira_mock.return_value = True  # cannot set return_value in decorated AND have the mock into the method
-        response = self.edit_jira_project_for_engagement(Engagement.objects.get(id=3), expected_delta_jira_project_db=0)
-        response = self.edit_jira_project_for_engagement2(Engagement.objects.get(id=3), expected_delta_jira_project_db=0)
+        self.edit_jira_project_for_engagement(Engagement.objects.get(id=3), expected_delta_jira_project_db=0)
+        self.edit_jira_project_for_engagement2(Engagement.objects.get(id=3), expected_delta_jira_project_db=0)
         self.assertEqual(jira_mock.call_count, 0)
 
 

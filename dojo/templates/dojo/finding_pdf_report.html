@@ -87,7 +87,9 @@
                         <div class="table-responsive">
                             <table id="notes" class="table-striped table table-condensed table-hover centered">
                                 <tr>
+                                    {% block finding_header %}
                                     <th>Severity</th>
+                                    <th>EPSS Score / Percentile</th>
                                     <th>Status</th>
                                     {% if finding.risk_acceptance_set.all %}
                                         <th>Acceptance</th>
@@ -102,8 +104,10 @@
                                     {% if finding.cwe > 0 %}
                                         <th>CWE</th>
                                     {% endif %}
+                                    {% endblock finding_header %}
                                 </tr>
                                 <tr>
+                                    {% block finding_data %}
                                     <td>
                                     <span class="label severity severity-{{ finding.severity }}">
                                         {% if finding.severity %}
@@ -112,6 +116,11 @@
                                             Unknown
                                         {% endif %}
                                     </span>
+                                    </td>
+                                    <td>
+                                        {{ finding.epss_score|format_epss }}
+                                        /
+                                        {{ finding.epss_percentile|format_epss }}
                                     </td>
                                     <td>{{ finding.status }}</td>
                                     {% if finding.risk_acceptance_set.all %}
@@ -138,7 +147,7 @@
                                             </a>
                                         </td>
                                     {% endif %}
-
+                                    {% endblock finding_data %}
                                 </tr>
                             </table>
                         </div>
@@ -255,7 +264,6 @@
     <script src="{{ host }}{% static "flot/jquery.flot.resize.js" %}"></script>
     <script src="{{ host }}{% static "flot/jquery.flot.time.js" %}"></script>
     <script src="{{ host }}{% static "flot/jquery.flot.stack.js" %}"></script>
-    <script src="{{ host }}{% static "flot-axis/jquery.flot.axislabels.js" %}"></script>
     <script src="{{ host }}{% static "dojo/js/metrics.js" %}"></script>
     <script type="text/javascript">
         $(function () {

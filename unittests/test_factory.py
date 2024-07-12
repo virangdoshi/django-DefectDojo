@@ -1,5 +1,6 @@
-from dojo.tools.factory import get_parser
 from dojo.models import Test, Test_Type
+from dojo.tools.factory import get_parser
+
 from .dojo_test_case import DojoTestCase, get_unit_tests_path
 
 
@@ -9,25 +10,25 @@ class TestFactory(DojoTestCase):
             scan_type = "Acunetix Scan"
             testfile = open(get_unit_tests_path() + "/scans/acunetix/one_finding.xml")
             parser = get_parser(scan_type)
-            findings = parser.get_findings(testfile, Test())
+            parser.get_findings(testfile, Test())
             testfile.close()
         with self.subTest(scan_type="Anchore Engine Scan"):
             scan_type = "Anchore Engine Scan"
             testfile = open(get_unit_tests_path() + "/scans/anchore_engine/one_vuln.json")
             parser = get_parser(scan_type)
-            findings = parser.get_findings(testfile, Test())
+            parser.get_findings(testfile, Test())
             testfile.close()
         with self.subTest(scan_type="Tenable Scan"):
             scan_type = "Tenable Scan"
             testfile = open(get_unit_tests_path() + "/scans/tenable/nessus/nessus_v_unknown.xml")
             parser = get_parser(scan_type)
-            findings = parser.get_findings(testfile, Test())
+            parser.get_findings(testfile, Test())
             testfile.close()
         with self.subTest(scan_type="ZAP Scan"):
             scan_type = "ZAP Scan"
             testfile = open(get_unit_tests_path() + "/scans/zap/some_2.9.0.xml")
             parser = get_parser(scan_type)
-            findings = parser.get_findings(testfile, Test())
+            parser.get_findings(testfile, Test())
             testfile.close()
 
     def test_get_parser_error(self):
@@ -46,7 +47,7 @@ class TestFactory(DojoTestCase):
         with self.assertRaises(ValueError):
             get_parser(scan_type)
         # activate the parser
-        test_type, created = Test_Type.objects.update_or_create(
+        _test_type, _created = Test_Type.objects.update_or_create(
             name=scan_type,
             defaults={"active": True},
         )

@@ -1,13 +1,14 @@
-from selenium.webdriver.support.ui import Select
-import unittest
-import re
-import sys
 import os
-import git
+import re
 import shutil
+import sys
+import unittest
+
+import git
 from base_test_class import BaseTestCase
 from product_test import ProductTest
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import Select
 
 
 class ScannerTest(BaseTestCase):
@@ -17,7 +18,7 @@ class ScannerTest(BaseTestCase):
         if os.path.isdir(self.repo_path):
             shutil.rmtree(self.repo_path)
         os.mkdir(self.repo_path)
-        scan_types = git.Repo.clone_from('https://github.com/DefectDojo/sample-scan-files', self.repo_path)
+        git.Repo.clone_from('https://github.com/DefectDojo/sample-scan-files', self.repo_path)
         self.remove_items = ['__init__.py', '__init__.pyc', 'factory.py', 'factory.pyc',
                         'factory.py', 'LICENSE', 'README.md', '.gitignore', '.git', '__pycache__']
         tool_path = dir_path[:-5] + 'dojo/tools'

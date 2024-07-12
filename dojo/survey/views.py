@@ -1,29 +1,55 @@
 import pickle
-from datetime import date
+from datetime import date, timedelta
 
 from django.contrib import messages
+from django.contrib.admin.utils import NestedObjects
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied
-from django.urls import reverse
-from django.http.response import HttpResponseRedirect, HttpResponse, Http404
-from django.shortcuts import render, get_object_or_404
-from django.utils.html import escape
-from datetime import timedelta
-from django.utils import timezone as tz
-from django.contrib.admin.utils import NestedObjects
 from django.db import DEFAULT_DB_ALIAS
+from django.http.response import Http404, HttpResponse, HttpResponseRedirect
+from django.shortcuts import get_object_or_404, render
+from django.urls import reverse
+from django.utils import timezone as tz
+from django.utils.html import escape
 
-from dojo.filters import QuestionnaireFilter, QuestionFilter
-from dojo.models import Engagement, System_Settings
-from dojo.utils import add_breadcrumb, get_page_items
-from dojo.forms import Add_Questionnaire_Form, Delete_Questionnaire_Form, CreateQuestionnaireForm, Delete_Eng_Survey_Form, \
-    EditQuestionnaireQuestionsForm, CreateQuestionForm, CreateTextQuestionForm, AssignUserForm, \
-    CreateChoiceQuestionForm, EditTextQuestionForm, EditChoiceQuestionForm, AddChoicesForm, \
-    AddEngagementForm, AddGeneralQuestionnaireForm, DeleteGeneralQuestionnaireForm
-from dojo.models import Answered_Survey, Engagement_Survey, Answer, TextQuestion, ChoiceQuestion, Choice, General_Survey, Question
-from dojo.authorization.authorization import user_has_permission_or_403, user_has_permission, user_has_configuration_permission
-from dojo.authorization.roles_permissions import Permissions
+from dojo.authorization.authorization import (
+    user_has_configuration_permission,
+    user_has_permission,
+    user_has_permission_or_403,
+)
 from dojo.authorization.authorization_decorators import user_is_authorized, user_is_configuration_authorized
+from dojo.authorization.roles_permissions import Permissions
+from dojo.filters import QuestionFilter, QuestionnaireFilter
+from dojo.forms import (
+    Add_Questionnaire_Form,
+    AddChoicesForm,
+    AddEngagementForm,
+    AddGeneralQuestionnaireForm,
+    AssignUserForm,
+    CreateChoiceQuestionForm,
+    CreateQuestionForm,
+    CreateQuestionnaireForm,
+    CreateTextQuestionForm,
+    Delete_Eng_Survey_Form,
+    Delete_Questionnaire_Form,
+    DeleteGeneralQuestionnaireForm,
+    EditChoiceQuestionForm,
+    EditQuestionnaireQuestionsForm,
+    EditTextQuestionForm,
+)
+from dojo.models import (
+    Answer,
+    Answered_Survey,
+    Choice,
+    ChoiceQuestion,
+    Engagement,
+    Engagement_Survey,
+    General_Survey,
+    Question,
+    System_Settings,
+    TextQuestion,
+)
+from dojo.utils import add_breadcrumb, get_page_items
 
 
 @user_is_authorized(Engagement, Permissions.Engagement_Edit, 'eid')
@@ -36,9 +62,9 @@ def delete_engagement_survey(request, eid, sid):
     if request.method == 'POST':
         form = Delete_Questionnaire_Form(request.POST, instance=survey)
         if form.is_valid():
-            answers = Answer.objects.filter(
+            answers = Answer.polymorphic.filter(
                 question__in=[
-                    question.id for question in survey.survey.questions.all()],
+                    question.id for question in Question.polymorphic.filter(engagement_survey=survey.survey)],
                 answered_survey=survey)
             for answer in answers:
                 answer.delete()
@@ -71,7 +97,6 @@ def delete_engagement_survey(request, eid, sid):
 def answer_questionnaire(request, eid, sid):
     survey = get_object_or_404(Answered_Survey, id=sid)
     engagement = get_object_or_404(Engagement, id=eid)
-    prod = engagement.product
     system_settings = System_Settings.objects.all()[0]
 
     if not system_settings.allow_anonymous_survey_repsonse:
@@ -96,7 +121,7 @@ def answer_questionnaire(request, eid, sid):
                 prefix=str(q.id),
                 answered_survey=survey,
                 question=q, form_tag=False)
-            for q in survey.survey.questions.all()]
+            for q in Question.polymorphic.filter(engagement_survey=survey.survey)]
 
         questions_are_valid = []
 
@@ -185,7 +210,7 @@ def get_answered_questions(survey=None, read_only=False):
             answered_survey=survey,
             question=q,
             form_tag=False)
-        for q in survey.survey.questions.all()]
+        for q in Question.polymorphic.filter(engagement_survey=survey.survey)]
 
     if read_only:
         for question in questions:
@@ -352,7 +377,7 @@ def edit_questionnaire_questions(request, sid):
     survey = get_object_or_404(Engagement_Survey, id=sid)
     if not user_has_configuration_permission(request.user, 'dojo.add_engagement_survey') and \
             not user_has_configuration_permission(request.user, 'dojo.change_engagement_survey'):
-        raise PermissionDenied()
+        raise PermissionDenied
 
     answered_surveys = Answered_Survey.objects.filter(survey=survey)
     reverted = False
@@ -398,13 +423,11 @@ def edit_questionnaire_questions(request, sid):
 
 @user_is_configuration_authorized('dojo.view_engagement_survey')
 def questionnaire(request):
-    user = request.user
     surveys = Engagement_Survey.objects.all()
     surveys = QuestionnaireFilter(request.GET, queryset=surveys)
     paged_surveys = get_page_items(request, surveys.qs, 25)
     general_surveys = General_Survey.objects.all()
     for survey in general_surveys:
-        survey_exp = survey.expiration
         if survey.expiration < tz.now():
             survey.delete()
 
@@ -419,7 +442,7 @@ def questionnaire(request):
 
 @user_is_configuration_authorized('dojo.view_question')
 def questions(request):
-    questions = Question.objects.all()
+    questions = Question.polymorphic.all()
     questions = QuestionFilter(request.GET, queryset=questions)
     paged_questions = get_page_items(request, questions.qs, 25)
     add_breadcrumb(title="Questions", top_level=False, request=request)
@@ -487,8 +510,7 @@ def create_question(request):
                     error = True
 
             if '_popup' in request.GET and not error:
-                resp = '<script type="text/javascript">opener.dismissAddAnotherPopupDojo(window, "%s", "%s");</script>' \
-                       % (escape(created_question._get_pk_val()), escape(created_question.text))
+                resp = f'<script type="text/javascript">opener.dismissAddAnotherPopupDojo(window, "{escape(created_question._get_pk_val())}", "{escape(created_question.text)}");</script>'
                 resp += '<script type="text/javascript">window.close();</script>'
                 return HttpResponse(resp)
 
@@ -503,8 +525,10 @@ def create_question(request):
 
 @user_is_configuration_authorized('dojo.change_question')
 def edit_question(request, qid):
-    error = False
-    question = get_object_or_404(Question, id=qid)
+    try:
+        question = Question.polymorphic.get(id=qid)
+    except Question.DoesNotExist:
+        return Http404()
     survey = Engagement_Survey.objects.filter(questions__in=[question])
     reverted = False
     answered = []
@@ -524,7 +548,7 @@ def edit_question(request, qid):
     elif type == 'dojo | choice question':
         form = EditChoiceQuestionForm(instance=question)
     else:
-        raise Http404()
+        raise Http404
 
     if request.method == 'POST':
         if type == 'dojo | text question':
@@ -532,7 +556,7 @@ def edit_question(request, qid):
         elif type == 'dojo | choice question':
             form = EditChoiceQuestionForm(request.POST, instance=question)
         else:
-            raise Http404()
+            raise Http404
 
         if form.is_valid():
             form.save()
@@ -578,8 +602,7 @@ def add_choices(request):
             if '_popup' in request.GET:
                 resp = ''
                 if created:
-                    resp = '<script type="text/javascript">opener.dismissAddAnotherPopupDojo(window, "%s", "%s");</script>' \
-                           % (escape(choice._get_pk_val()), escape(choice.label))
+                    resp = f'<script type="text/javascript">opener.dismissAddAnotherPopupDojo(window, "{escape(choice._get_pk_val())}", "{escape(choice.label)}");</script>'
                 resp += '<script type="text/javascript">window.close();</script>'
                 return HttpResponse(resp)
     add_breadcrumb(title="Add Choice", top_level=False, request=request)
@@ -656,7 +679,7 @@ def delete_empty_questionnaire(request, esid):
         form = Delete_Questionnaire_Form(request.POST, instance=survey)
         if form.is_valid():
             answers = Answer.objects.filter(
-                question__in=[question.id for question in survey.survey.questions.all()],
+                question__in=[question.id for question in Question.polymorphic.filter(engagement_survey=survey.survey)],
                 answered_survey=survey)
             for answer in answers:
                 answer.delete()
@@ -736,7 +759,7 @@ def answer_empty_survey(request, esid):
                 'You must be logged in to answer questionnaire. Otherwise, enable anonymous response in system settings.',
                 extra_tags='alert-danger')
             # will render 403
-            raise PermissionDenied()
+            raise PermissionDenied
 
     questions = [
         q.get_form()(
@@ -744,7 +767,7 @@ def answer_empty_survey(request, esid):
             engagement_survey=engagement_survey,
             question=q,
             form_tag=False)
-        for q in engagement_survey.questions.all()
+        for q in Question.polymorphic.filter(engagement_survey=engagement_survey)
     ]
 
     if request.method == 'POST':
@@ -757,7 +780,7 @@ def answer_empty_survey(request, esid):
                 answered_survey=survey,
                 question=q,
                 form_tag=False)
-            for q in survey.survey.questions.all()
+            for q in Question.polymorphic.filter(engagement_survey=survey.survey)
         ]
 
         questions_are_valid = []

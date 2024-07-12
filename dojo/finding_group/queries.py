@@ -1,8 +1,8 @@
 from crum import get_current_user
 from django.db.models import Exists, OuterRef, Q
-from dojo.models import Finding_Group, Product_Member, Product_Type_Member, \
-    Product_Group, Product_Type_Group
+
 from dojo.authorization.authorization import get_roles_for_permission, user_has_global_permission
+from dojo.models import Finding_Group, Product_Group, Product_Member, Product_Type_Group, Product_Type_Member
 
 
 def get_authorized_finding_groups(permission, queryset=None, user=None):
@@ -47,9 +47,9 @@ def get_authorized_finding_groups(permission, queryset=None, user=None):
         test__engagement__product__prod_type__authorized_group=Exists(authorized_product_type_groups),
         test__engagement__product__authorized_group=Exists(authorized_product_groups))
     finding_groups = finding_groups.filter(
-        Q(test__engagement__product__prod_type__member=True) |
-        Q(test__engagement__product__member=True) |
-        Q(test__engagement__product__prod_type__authorized_group=True) |
-        Q(test__engagement__product__authorized_group=True))
+        Q(test__engagement__product__prod_type__member=True)
+        | Q(test__engagement__product__member=True)
+        | Q(test__engagement__product__prod_type__authorized_group=True)
+        | Q(test__engagement__product__authorized_group=True))
 
     return finding_groups

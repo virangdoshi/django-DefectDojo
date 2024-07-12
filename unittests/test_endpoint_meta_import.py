@@ -1,18 +1,20 @@
-from django.urls import reverse
-from dojo.models import User
-from rest_framework.authtoken.models import Token
-from rest_framework.test import APIClient
-from django.test.client import Client
-from .dojo_test_case import DojoAPITestCase, get_unit_tests_path
-from .test_utils import assertImportModelsCreated
 import logging
 
+from django.test.client import Client
+from django.urls import reverse
+from rest_framework.authtoken.models import Token
+from rest_framework.test import APIClient
+
+from dojo.models import User
+
+from .dojo_test_case import DojoAPITestCase, get_unit_tests_path
+from .test_utils import assertImportModelsCreated
 
 logger = logging.getLogger(__name__)
 
 
 # test methods to be used both by API Test and UI Test
-class EndpointMetaImportMixin(object):
+class EndpointMetaImportMixin:
     def __init__(self, *args, **kwargs):
         self.meta_import_full = 'endpoint_meta_import/full_endpoint_meta_import.csv'
         self.meta_import_no_hostname = 'endpoint_meta_import/no_hostname_endpoint_meta_import.csv'
@@ -27,7 +29,7 @@ class EndpointMetaImportMixin(object):
         meta_count_before = self.db_dojo_meta_count()
 
         with assertImportModelsCreated(self, tests=0, engagements=0, products=0, endpoints=3):
-            import0 = self.endpoint_meta_import_scan_with_params(
+            self.endpoint_meta_import_scan_with_params(
                 self.meta_import_full, create_endpoints=True, create_tags=True, create_dojo_meta=True)
 
         self.assertEqual(endpoint_count_before + 3, self.db_endpoint_count())
@@ -36,20 +38,20 @@ class EndpointMetaImportMixin(object):
 
     def test_endpoint_meta_import_endpoint_missing_hostname(self):
         with assertImportModelsCreated(self, tests=0, engagements=0, products=0, endpoints=0):
-            import0 = self.endpoint_meta_import_scan_with_params(
+            self.endpoint_meta_import_scan_with_params(
                 self.meta_import_no_hostname, create_endpoints=True, create_tags=True, create_dojo_meta=True, expected_http_status_code=400)
 
     def test_endpoint_meta_import_tag_remove_column(self):
         # Import full scan first
         with assertImportModelsCreated(self, tests=0, engagements=0, products=0, endpoints=3):
-            import0 = self.endpoint_meta_import_scan_with_params(
+            self.endpoint_meta_import_scan_with_params(
                 self.meta_import_full, create_endpoints=True, create_tags=True, create_dojo_meta=False)
         # Record numbers
         endpoint_count_before = self.db_endpoint_count()
         endpoint_tag_count_before = self.db_endpoint_tag_count()
         # Import again with one column missing
         with assertImportModelsCreated(self, tests=0, engagements=0, products=0, endpoints=0):
-            import0 = self.endpoint_meta_import_scan_with_params(
+            self.endpoint_meta_import_scan_with_params(
                 self.meta_import_updated_removed, create_endpoints=True, create_tags=True, create_dojo_meta=False)
         # See that nothing has been removed
         self.assertEqual(endpoint_count_before, self.db_endpoint_count())
@@ -58,14 +60,14 @@ class EndpointMetaImportMixin(object):
     def test_endpoint_meta_import_tag_added_column(self):
         # Import full scan first
         with assertImportModelsCreated(self, tests=0, engagements=0, products=0, endpoints=3):
-            import0 = self.endpoint_meta_import_scan_with_params(
+            self.endpoint_meta_import_scan_with_params(
                 self.meta_import_full, create_endpoints=True, create_tags=True, create_dojo_meta=False)
         # Record numbers
         endpoint_count_before = self.db_endpoint_count()
         endpoint_tag_count_before = self.db_endpoint_tag_count()
         # Import again with one column added
         with assertImportModelsCreated(self, tests=0, engagements=0, products=0, endpoints=0):
-            import0 = self.endpoint_meta_import_scan_with_params(
+            self.endpoint_meta_import_scan_with_params(
                 self.meta_import_updated_added, create_endpoints=True, create_tags=True, create_dojo_meta=False)
         # See that nothing has been removed
         self.assertEqual(endpoint_count_before, self.db_endpoint_count())
@@ -75,7 +77,7 @@ class EndpointMetaImportMixin(object):
     def test_endpoint_meta_import_tag_changed_column(self):
         # Import full scan first
         with assertImportModelsCreated(self, tests=0, engagements=0, products=0, endpoints=3):
-            import0 = self.endpoint_meta_import_scan_with_params(
+            self.endpoint_meta_import_scan_with_params(
                 self.meta_import_full, create_endpoints=True, create_tags=True, create_dojo_meta=False)
         # Record numbers
         endpoint_count_before = self.db_endpoint_count()
@@ -85,7 +87,7 @@ class EndpointMetaImportMixin(object):
         human_resource_tag = endpoint['tags'][endpoint['tags'].index('team:human resources')]
         # Import again with one column missing
         with assertImportModelsCreated(self, tests=0, engagements=0, products=0, endpoints=0):
-            import0 = self.endpoint_meta_import_scan_with_params(
+            self.endpoint_meta_import_scan_with_params(
                 self.meta_import_updated_changed, create_endpoints=True, create_tags=True, create_dojo_meta=False)
         # See that nothing has been added or removed
         self.assertEqual(endpoint_count_before, self.db_endpoint_count())
@@ -99,14 +101,14 @@ class EndpointMetaImportMixin(object):
     def test_endpoint_meta_import_meta_remove_column(self):
         # Import full scan first
         with assertImportModelsCreated(self, tests=0, engagements=0, products=0, endpoints=3):
-            import0 = self.endpoint_meta_import_scan_with_params(
+            self.endpoint_meta_import_scan_with_params(
                 self.meta_import_full, create_endpoints=True, create_tags=False, create_dojo_meta=True)
         # Record numbers
         endpoint_count_before = self.db_endpoint_count()
         meta_count_before = self.db_dojo_meta_count()
         # Import again with one column missing
         with assertImportModelsCreated(self, tests=0, engagements=0, products=0, endpoints=0):
-            import0 = self.endpoint_meta_import_scan_with_params(
+            self.endpoint_meta_import_scan_with_params(
                 self.meta_import_updated_removed, create_endpoints=True, create_tags=False, create_dojo_meta=True)
         # See that nothing has been removed
         self.assertEqual(endpoint_count_before, self.db_endpoint_count())
@@ -115,14 +117,14 @@ class EndpointMetaImportMixin(object):
     def test_endpoint_meta_import_meta_added_column(self):
         # Import full scan first
         with assertImportModelsCreated(self, tests=0, engagements=0, products=0, endpoints=3):
-            import0 = self.endpoint_meta_import_scan_with_params(
+            self.endpoint_meta_import_scan_with_params(
                 self.meta_import_full, create_endpoints=True, create_tags=False, create_dojo_meta=True)
         # Record numbers
         endpoint_count_before = self.db_endpoint_count()
         meta_count_before = self.db_dojo_meta_count()
         # Import again with one column added
         with assertImportModelsCreated(self, tests=0, engagements=0, products=0, endpoints=0):
-            import0 = self.endpoint_meta_import_scan_with_params(
+            self.endpoint_meta_import_scan_with_params(
                 self.meta_import_updated_added, create_endpoints=True, create_tags=False, create_dojo_meta=True)
         # 1 meta x 3 endpoints = 3 tags
         self.assertEqual(endpoint_count_before, self.db_endpoint_count())
@@ -131,7 +133,7 @@ class EndpointMetaImportMixin(object):
     def test_endpoint_meta_import_meta_changed_column(self):
         # Import full scan first
         with assertImportModelsCreated(self, tests=0, engagements=0, products=0, endpoints=3):
-            import0 = self.endpoint_meta_import_scan_with_params(
+            self.endpoint_meta_import_scan_with_params(
                 self.meta_import_full, create_endpoints=True, create_tags=False, create_dojo_meta=True)
         # Record numbers
         endpoint_count_before = self.db_endpoint_count()
@@ -141,7 +143,7 @@ class EndpointMetaImportMixin(object):
         meta_value = self.get_endpoints_meta_api(endpoint_id, 'team')['results'][0]['value']
         # Import again with one column missing
         with assertImportModelsCreated(self, tests=0, engagements=0, products=0, endpoints=0):
-            import0 = self.endpoint_meta_import_scan_with_params(
+            self.endpoint_meta_import_scan_with_params(
                 self.meta_import_updated_changed, create_endpoints=True, create_tags=False, create_dojo_meta=True)
         # See that nothing has been added or removed
         self.assertEqual(endpoint_count_before, self.db_endpoint_count())
@@ -204,11 +206,12 @@ class EndpointMetaImportTestUI(DojoAPITestCase, EndpointMetaImportMixin):
 
     def endpoint_meta_import_scan_with_params_ui(self, filename, product=1, create_endpoints=True,
                                                  create_tags=True, create_dojo_meta=True, expected_http_status_code=201):
-        payload = {
-            "create_endpoints": create_endpoints,
-            "create_tags": create_tags,
-            "create_dojo_meta": create_dojo_meta,
-            "file": open(get_unit_tests_path() + '/' + filename),
-        }
+        with open(get_unit_tests_path() + '/' + filename) as testfile:
+            payload = {
+                "create_endpoints": create_endpoints,
+                "create_tags": create_tags,
+                "create_dojo_meta": create_dojo_meta,
+                "file": testfile,
+            }
 
-        return self.endpoint_meta_import_ui(product, payload)
+            return self.endpoint_meta_import_ui(product, payload)

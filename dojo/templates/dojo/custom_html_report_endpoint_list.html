@@ -17,7 +17,7 @@
 
 <div id="endpoint_content">
     {% for endpoint in endpoints %}
-        <div class="panel panel-warning">
+        <div class="panel panel-default panel-warning">
             <div class="panel-heading">
                 <h4>
                     Endpoint: {{ endpoint }} with {{ endpoint.active_findings|length|apnumber }}
@@ -49,6 +49,7 @@
                     <table id="heading" class="table-striped table table-condensed table-hover centered">
                         <tr>
                             <th>Severity</th>
+                            <th>EPSS Score / Percentile</th>
                             <th>Status</th>
                             {% if finding.risk_acceptance_set.all %}
                                 <th>Acceptance</th>
@@ -74,6 +75,11 @@
                                     Unknown
                                 {% endif %}
                             </span>
+                            </td>
+                            <td>
+                                {{ finding.epss_score|format_epss }}
+                                /
+                                {{ finding.epss_percentile|format_epss }}
                             </td>
                             <td>{{ finding.status }}</td>
                             {% if finding.risk_acceptance_set.all %}

@@ -1,19 +1,17 @@
 import logging
+
 from django.contrib import messages
-from django.urls import reverse
 from django.http import HttpResponseRedirect
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import get_object_or_404, render
+from django.urls import reverse
 from django.utils import timezone
-from dojo.models import Finding, Product, Engagement, Cred_User, Cred_Mapping, Test
-from dojo.utils import add_breadcrumb, Product_Tab
-from dojo.forms import CredUserForm, NoteForm, CredMappingFormProd, CredMappingForm
 
-from dojo.utils import dojo_crypto_encrypt, prepare_for_view
-from dojo.authorization.authorization_decorators import user_is_authorized
+from dojo.authorization.authorization_decorators import user_is_authorized, user_is_configuration_authorized
 from dojo.authorization.roles_permissions import Permissions
-from dojo.authorization.authorization_decorators import user_is_configuration_authorized
 from dojo.cred.queries import get_authorized_cred_mappings
-
+from dojo.forms import CredMappingForm, CredMappingFormProd, CredUserForm, NoteForm
+from dojo.models import Cred_Mapping, Cred_User, Engagement, Finding, Product, Test
+from dojo.utils import Product_Tab, add_breadcrumb, dojo_crypto_encrypt, prepare_for_view
 
 logger = logging.getLogger(__name__)
 
@@ -214,11 +212,6 @@ def view_cred_product_engagement(request, eid, ttid):
         title="Credential Manager", top_level=False, request=request)
     cred_type = "Engagement"
     edit_link = ""
-    view_link = reverse(
-        'view_cred_product_engagement', args=(
-            eid,
-            cred.id,
-        ))
     delete_link = reverse(
         'delete_cred_engagement', args=(
             eid,
@@ -270,11 +263,6 @@ def view_cred_engagement_test(request, tid, ttid):
         title="Credential Manager", top_level=False, request=request)
     cred_type = "Test"
     edit_link = None
-    view_link = reverse(
-        'view_cred_engagement_test', args=(
-            tid,
-            cred.id,
-        ))
     delete_link = reverse(
         'delete_cred_test', args=(
             tid,
@@ -326,11 +314,6 @@ def view_cred_finding(request, fid, ttid):
         title="Credential Manager", top_level=False, request=request)
     cred_type = "Finding"
     edit_link = None
-    view_link = reverse(
-        'view_cred_finding', args=(
-            fid,
-            cred.id,
-        ))
     delete_link = reverse(
         'delete_cred_finding', args=(
             fid,

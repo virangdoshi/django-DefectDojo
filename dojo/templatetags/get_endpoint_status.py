@@ -1,6 +1,8 @@
 from django import template
-from dojo.models import Endpoint_Status
 from django.db.models import Q
+
+from dojo.models import Endpoint_Status
+
 register = template.Library()
 
 
@@ -21,10 +23,10 @@ def get_vulnerable_endpoints(finding):
 @register.filter(name='get_mitigated_endpoints')
 def get_mitigated_endpoints(finding):
     return finding.endpoints.filter(
-        Q(status_endpoint__mitigated=True) |
-        Q(status_endpoint__false_positive=True) |
-        Q(status_endpoint__out_of_scope=True) |
-        Q(status_endpoint__risk_accepted=True))
+        Q(status_endpoint__mitigated=True)
+        | Q(status_endpoint__false_positive=True)
+        | Q(status_endpoint__out_of_scope=True)
+        | Q(status_endpoint__risk_accepted=True))
 
 
 @register.filter

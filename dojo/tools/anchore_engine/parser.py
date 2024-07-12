@@ -3,7 +3,7 @@ import json
 from dojo.models import Finding
 
 
-class AnchoreEngineParser(object):
+class AnchoreEngineParser:
     def get_scan_types(self):
         return ["Anchore Engine Scan"]
 
@@ -15,7 +15,7 @@ class AnchoreEngineParser(object):
 
     def get_findings(self, filename, test):
         data = json.load(filename)
-        dupes = dict()
+        dupes = {}
         for item in data["vulnerabilities"]:
             vulnerability_id = item.get("vuln")
 
@@ -89,6 +89,12 @@ class AnchoreEngineParser(object):
                             cvssv3_base_score = item["vendor_data"][1][
                                 "cvss_v3"
                             ]["base_score"]
+            # cvssv3 score spec states value should be between 0.0 and 10.0
+            # anchorage provides a -1.0 in some situations which breaks spec
+            if (cvssv3_base_score
+                and ((float(cvssv3_base_score) < 0)
+                     or (float(cvssv3_base_score) > 10))):
+                cvssv3_base_score = None
 
             references = item["url"]
 

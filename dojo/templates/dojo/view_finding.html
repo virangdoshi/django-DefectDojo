@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load display_tags %}
+{% load multiply %}
 {% load authorization_tags %}
 {% load humanize %}
 {% load static %}
@@ -268,8 +269,17 @@
                             <th>Date Mitigated</th>
                             <th>Mitigated By</th>
                         {% endif %}
-                            <th>CWE</th>
-                            <th>Vulnerability Id</th>
+                        <th>CWE</th>
+                        <th>Vulnerability Id</th>
+                        {% if finding.epss_score != None or finding.epss_percentile != None %}
+                            {% if finding.epss_score != None and finding.epss_percentile != None %}
+                                <th>EPSS Score / Percentile</th>
+                            {% elif finding.epss_score != None and finding.epss_percentile == None %}
+                                <th>EPSS Score</th>
+                            {% elif finding.epss_score == None and finding.epss_percentile != None %}
+                                <th>EPSS Percentile</th>
+                            {% endif %}
+                        {% endif %}
                         <th>Found by</th>
                         {% if finding.vuln_id_from_tool %}
                             <th>Vuln ID from tool</th>
@@ -421,9 +431,24 @@
                             {% endif %}
                         {% endif %}
                         </td>
-                        <td> {% for scanner in found_by %}
-                            {{ scanner }}
-                        {% endfor %}</td>
+                        {% if finding.epss_score != None or finding.epss_percentile != None %}
+                                {% if finding.epss_score != None and finding.epss_percentile != None %}
+                                    <td>{{ finding.epss_score|multiply:100|floatformat:"2" }}% / {{ finding.epss_percentile|multiply:100|floatformat:"2" }}%</td>
+                                {% elif finding.epss_score != None and finding.epss_percentile == None %}
+                                    <td>{{ finding.epss_score|multiply:100|floatformat:"2" }}%</td>
+                                {% elif finding.epss_score == None and finding.epss_percentile != None %}
+                                    <td>{{ finding.epss_percentile|multiply:100|floatformat:"2" }}%</td>
+                                {% endif %}
+                        {% endif %}
+                        <td>
+                            {% if found_by %}
+                                {% for scanner in found_by %}
+                                    {{ scanner }}
+                                {% endfor %}
+                            {% else %}
+                                {{ finding.test.test_type }}
+                            {% endif %}
+                        </td>
                         {% endwith %}
                         {% if finding.vuln_id_from_tool %}
                             <td>{{ finding.vuln_id_from_tool }}</td>
@@ -704,6 +729,7 @@
         </div>
     {% endif %}
 
+    {% if similar_findings_enabled %}
         <div class="panel panel-default">
             <div class="panel-heading">
                 <h4 class="has-filters">Similar Findings ({{ similar_findings.paginator.count }})
@@ -734,8 +760,8 @@
                     </div>
                 {% endif %}
             </span>
-        </div>
-
+        </div>  
+    {% endif %}
     {% comment %} Add a form to (ab)use to submit any actions related to similar/duplicates as POST requests {% endcomment %}
     <form method="post" style="display: none" id="related_action">
         {% csrf_token %}
@@ -760,7 +786,7 @@
                                 <span>Active</span>
                             </label>
                             <label style="font-size: 80%; font-weight: normal; display: block">
-                                <input id="id_bulk_false_p" label="false_positive name="false_positive" type="checkbox"/>
+                                <input id="id_bulk_false_p" label="false_positive" name="false_positive" type="checkbox"/>
                                 <span>False Positive</span>
                             </label>
                             <label style="font-size: 80%; font-weight: normal; display: block">
@@ -917,7 +943,7 @@
                             <div class="col-md-2" style="text-align: center">
                                 <div class="row">
                                     {% url 'access_file' fid=file.id oid=finding.id obj_type='Finding' as image_url %}
-                                    <a href="{{ image_url }}" target="_blank">
+                                    <a href="{{ image_url }}" target="_blank" download>
                                         {% if file|get_thumbnail %}
                                             <img src="{{ image_url }}" alt="thumbnail" style="width:150px">
                                         {% else %}
@@ -1142,6 +1168,7 @@
     <div class="protip">
        <i class="fa-solid fa-lightbulb"></i> <strong>ProTip!</strong> Type <kbd>e</kbd> to edit any finding, <kbd>p</kbd> and <kbd>n</kbd> to navigate to the previous or next finding.
     </div>
+</div>
 {% endblock %}
 {% block postscript %}
     {{ block.super }}
@@ -1456,6 +1483,12 @@
         $(document).ready(function() {
             date =  new Date().toISOString().slice(0, 10);
             var fileDated = 'Findings_List_' + date;
+            var percentSort = function(data, type, row, meta) {
+                if(type === 'sort') {
+                    return (data && data.endsWith("%")) ? parseFloat(data.slice(0, -1)) : -1.00;
+                }
+                return data;
+            }
             var columns = [
                 { "data": "relationship" },
                 { "data": "severity" },
@@ -1469,6 +1502,8 @@
                 { "data": "product" },
                 { "data": "cwe" },
                 { "data": "cve" },
+                { "data": "epss_score", "type": "num", "render": percentSort },
+                { "data": "epss_percentile", "type": "num", "render": percentSort },
                 { "data": "file_path" },
                 {% if system_settings.enable_jira %}
                     { "data": "jira_id" },

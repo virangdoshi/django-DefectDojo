@@ -1,17 +1,19 @@
 import datetime
-from django.urls import reverse
-from dojo.models import Test_Type, User, Test, Finding
-from rest_framework.authtoken.models import Token
-from rest_framework.test import APIClient
-from django.test.client import Client
-from django.utils import timezone
 
-from .dojo_test_case import DojoAPITestCase, get_unit_tests_path
-from .test_utils import assertTestImportModelsCreated
-from django.test import override_settings
 # from unittest import skip
 import logging
 
+from django.test import override_settings
+from django.test.client import Client
+from django.urls import reverse
+from django.utils import timezone
+from rest_framework.authtoken.models import Token
+from rest_framework.test import APIClient
+
+from dojo.models import Finding, Test, Test_Type, User
+
+from .dojo_test_case import DojoAPITestCase, get_unit_tests_path
+from .test_utils import assertTestImportModelsCreated
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +52,7 @@ PRODUCT_TYPE_NAME_DEFAULT = 'Type type'
 # 5 active sev medium
 
 # test methods to be used both by API Test and UI Test
-class ImportReimportMixin(object):
+class ImportReimportMixin:
     def __init__(self, *args, **kwargs):
         self.scans_path = '/scans/'
 
@@ -79,11 +81,14 @@ class ImportReimportMixin(object):
         self.veracode_mitigated_findings = self.scans_path + 'veracode/mitigated_finding.xml'
         self.scan_type_veracode = 'Veracode Scan'
 
-        self.clair_few_findings = self.scans_path + 'clair/few_vuln.json'
-        self.clair_empty = self.scans_path + 'clair/empty.json'
+        self.clair_few_findings = self.scans_path + 'clair/clair_few_vuln.json'
+        self.clair_empty = self.scans_path + 'clair/clair_empty.json'
         self.scan_type_clair = 'Clair Scan'
 
+        self.scan_type_generic = "Generic Findings Import"
         self.generic_filename_with_file = self.scans_path + "generic/test_with_image.json"
+        self.generic_import_1 = self.scans_path + "generic/test_import_report1.json"
+        self.generic_import_2 = self.scans_path + "generic/test_import_report2.json"
 
         self.aws_prowler_file_name = self.scans_path + 'aws_prowler/many_vuln.json'
         self.aws_prowler_file_name_plus_one = self.scans_path + 'aws_prowler/many_vuln_plus_one.json'
@@ -137,8 +142,6 @@ class ImportReimportMixin(object):
         # no notes expected
         self.assertEqual(notes_count_before, self.db_notes_count())
 
-        return test_id
-
     # import zap scan, testing:
     # - import
     # - active/verifed = False
@@ -179,8 +182,6 @@ class ImportReimportMixin(object):
         # no notes expected
         self.assertEqual(notes_count_before, self.db_notes_count())
 
-        return test_id
-
     # Test Scan_Date logic for Import. Reimport without a test_id cannot work for UI, so those tests are only in the API class below.
 
     # import zap scan without dates
@@ -199,8 +200,6 @@ class ImportReimportMixin(object):
         date = findings['results'][0]['date']
         self.assertEqual(date, str(timezone.localtime(timezone.now()).date()))
 
-        return test_id
-
     # import acunetix scan with dates
     # - import
     # - no scan scan_date does not overrides date set by parser
@@ -216,8 +215,6 @@ class ImportReimportMixin(object):
         # Get the date
         date = findings['results'][0]['date']
         self.assertEqual(date, '2018-09-24')
-
-        return test_id
 
     # import zap scan without dates
     # - import
@@ -235,8 +232,6 @@ class ImportReimportMixin(object):
         date = findings['results'][0]['date']
         self.assertEqual(date, '2006-12-26')
 
-        return test_id
-
     # import acunetix scan with dates
     # - import
     # - set scan_date overrides date set by parser
@@ -252,8 +247,6 @@ class ImportReimportMixin(object):
         # Get the date
         date = findings['results'][0]['date']
         self.assertEqual(date, '2006-12-26')
-
-        return test_id
 
     # Test Scan_Date for reimport in UI. UI can only rupload for existing tests, non UI tests are in API class below
 
@@ -322,7 +315,7 @@ class ImportReimportMixin(object):
         self.assert_finding_count_json(5, findings)
         # scan_date provided, so date should be equal to that overriding that from the parser
         self.log_finding_summary_json_api(findings)
-        self.assertEqual(findings['results'][2]['date'], "2020-02-02")
+        self.assertEqual(findings['results'][4]['date'], "2020-02-02")
 
     # Test re-import with unique_id_from_tool algorithm
     # import sonar scan with detailed parser, testing:
@@ -345,8 +338,6 @@ class ImportReimportMixin(object):
         # no notes expected
         self.assertEqual(notes_count_before, self.db_notes_count())
 
-        return test_id
-
     # Test re-import with unique_id_from_tool_or_hash_code algorithm
     # import veracode scan, testing:
     # - import
@@ -367,8 +358,6 @@ class ImportReimportMixin(object):
 
         # no notes expected
         self.assertEqual(notes_count_before, self.db_notes_count())
-
-        return test_id
 
     # import veracode and then reimport veracode again
     # - reimport, findings stay the same, stay active
@@ -730,7 +719,7 @@ class ImportReimportMixin(object):
         test_id = reimport1['test']
         self.assertEqual(test_id, test_id)
 
-        test = self.get_test_api(test_id)
+        self.get_test_api(test_id)
         findings = self.get_test_findings_api(test_id)
         self.log_finding_summary_json_api(findings)
 
@@ -770,7 +759,7 @@ class ImportReimportMixin(object):
         findings = self.get_test_findings_api(test_id)
         self.log_finding_summary_json_api(findings)
 
-        finding_count_before = self.db_finding_count()
+        self.db_finding_count()
         endpoint_count_before = self.db_endpoint_count()
         endpoint_status_count_before_active = self.db_endpoint_status_count(mitigated=False)
         endpoint_status_count_before_mitigated = self.db_endpoint_status_count(mitigated=True)
@@ -786,12 +775,12 @@ class ImportReimportMixin(object):
         endpoint_status_count_before_mitigated = self.db_endpoint_status_count(mitigated=True)
 
         with assertTestImportModelsCreated(self, reimports=1, affected_findings=2, closed=1, reactivated=1, untouched=3):
-            reimport0 = self.reimport_scan_with_params(test_id, self.zap_sample0_filename)
+            self.reimport_scan_with_params(test_id, self.zap_sample0_filename)
 
         test_id = reimport1['test']
         self.assertEqual(test_id, test_id)
 
-        test = self.get_test_api(test_id)
+        self.get_test_api(test_id)
         findings = self.get_test_findings_api(test_id)
         self.log_finding_summary_json_api(findings)
 
@@ -944,7 +933,7 @@ class ImportReimportMixin(object):
         test_id = reimport1['test']
         self.assertEqual(test_id, test_id)
 
-        test = self.get_test_api(test_id)
+        self.get_test_api(test_id)
         findings = self.get_test_findings_api(test_id)
         self.log_finding_summary_json_api(findings)
         self.assert_finding_count_json(4 + 2, findings)
@@ -1039,7 +1028,7 @@ class ImportReimportMixin(object):
 
         # reimport exact same report
         with assertTestImportModelsCreated(self, reimports=1, affected_findings=0, untouched=4):
-            reimport0 = self.reimport_scan_with_params(test_id, self.anchore_file_name, scan_type=self.scan_type_anchore)
+            self.reimport_scan_with_params(test_id, self.anchore_file_name, scan_type=self.scan_type_anchore)
 
         active_findings_after = self.get_test_findings_api(test_id, active=True)
         self.log_finding_summary_json_api(active_findings_after)
@@ -1161,14 +1150,12 @@ class ImportReimportMixin(object):
         import0 = self.import_scan_with_params(self.gitlab_dep_scan_components_filename,
                                                scan_type=self.scan_type_gtlab_dep_scan,
                                                minimum_severity='Info')
-
         test_id = import0['test']
-
         active_findings_before = self.get_test_findings_api(test_id, active=True)
         self.assert_finding_count_json(6, active_findings_before)
 
         with assertTestImportModelsCreated(self, reimports=1, affected_findings=0, created=0, untouched=6):
-            reimport0 = self.reimport_scan_with_params(test_id,
+            self.reimport_scan_with_params(test_id,
                                                        self.gitlab_dep_scan_components_filename,
                                                        scan_type=self.scan_type_gtlab_dep_scan,
                                                        minimum_severity='Info')
@@ -1435,7 +1422,7 @@ class ImportReimportMixin(object):
         test_id = import0['test']
         test = Test.objects.get(id=test_id)
         findings = Finding.objects.filter(test=test)
-        self.assertEqual(4, len(findings))
+        self.assertEqual(5, len(findings))
         self.assertEqual('GHSA-v6rh-hp5x-86rv', findings[3].cve)
         self.assertEqual(2, len(findings[3].vulnerability_ids))
         self.assertEqual('GHSA-v6rh-hp5x-86rv', findings[3].vulnerability_ids[0])
@@ -1446,18 +1433,27 @@ class ImportReimportMixin(object):
             engagement=test.engagement,
             test_type=test_type,
             scan_type=self.anchore_grype_scan_type,
-            target_start=datetime.datetime.now(),
-            target_end=datetime.datetime.now(),
+            target_start=datetime.datetime.now(datetime.timezone.utc),
+            target_end=datetime.datetime.now(datetime.timezone.utc),
         )
         reimport_test.save()
 
-        reimport0 = self.reimport_scan_with_params(reimport_test.id, self.anchore_grype_file_name, scan_type=self.anchore_grype_scan_type)
+        self.reimport_scan_with_params(reimport_test.id, self.anchore_grype_file_name, scan_type=self.anchore_grype_scan_type)
         findings = Finding.objects.filter(test=reimport_test)
-        self.assertEqual(4, len(findings))
+        self.assertEqual(5, len(findings))
         self.assertEqual('GHSA-v6rh-hp5x-86rv', findings[3].cve)
         self.assertEqual(2, len(findings[3].vulnerability_ids))
         self.assertEqual('GHSA-v6rh-hp5x-86rv', findings[3].vulnerability_ids[0])
         self.assertEqual('CVE-2021-44420', findings[3].vulnerability_ids[1])
+
+    def test_import_history_reactivated_and_untouched_findings_do_not_mix(self):
+        import0 = self.import_scan_with_params(self.generic_import_1, scan_type=self.scan_type_generic)
+        test_id = import0['test']
+        # reimport the second report
+        self.reimport_scan_with_params(test_id, self.generic_import_2, scan_type=self.scan_type_generic)
+        # reimport the first report again
+        self.reimport_scan_with_params(test_id, self.generic_import_1, scan_type=self.scan_type_generic)
+        # Passing this test means an exception does not occur
 
 
 class ImportReimportTestAPI(DojoAPITestCase, ImportReimportMixin):
@@ -1680,8 +1676,6 @@ class ImportReimportTestAPI(DojoAPITestCase, ImportReimportMixin):
         date = findings['results'][0]['date']
         self.assertEqual(date, str(timezone.localtime(timezone.now()).date()))
 
-        return test_id
-
     # reimport acunetix scan with dates (non existing test, so import is called inside DD)
     # - reimport
     # - deafult scan_date (today) does not overrides date set by parser
@@ -1698,8 +1692,6 @@ class ImportReimportTestAPI(DojoAPITestCase, ImportReimportMixin):
         # Get the date
         date = findings['results'][0]['date']
         self.assertEqual(date, '2018-09-24')
-
-        return test_id
 
     # reimport zap scan without dates (non existing test, so import is called inside DD)
     # - reimport
@@ -1718,8 +1710,6 @@ class ImportReimportTestAPI(DojoAPITestCase, ImportReimportMixin):
         date = findings['results'][0]['date']
         self.assertEqual(date, '2006-12-26')
 
-        return test_id
-
     # reimport acunetix scan with dates (non existing test, so import is called inside DD)
     # - reimport
     # - set scan_date overrides date set by parser
@@ -1736,8 +1726,6 @@ class ImportReimportTestAPI(DojoAPITestCase, ImportReimportMixin):
         # Get the date
         date = findings['results'][0]['date']
         self.assertEqual(date, '2006-12-26')
-
-        return test_id
 
 
 class ImportReimportTestUI(DojoAPITestCase, ImportReimportMixin):
@@ -1810,33 +1798,36 @@ class ImportReimportTestUI(DojoAPITestCase, ImportReimportMixin):
         elif not verified:
             verifiedPayload = "force_to_false"
 
-        payload = {
-                "minimum_severity": minimum_severity,
-                "active": activePayload,
-                "verified": verifiedPayload,
-                "scan_type": scan_type,
-                "file": open(get_unit_tests_path() + filename),
-                "environment": 1,
-                "version": "1.0.1",
-                "close_old_findings": close_old_findings,
-        }
+        with open(get_unit_tests_path() + filename) as testfile:
+            payload = {
+                    "minimum_severity": minimum_severity,
+                    "active": activePayload,
+                    "verified": verifiedPayload,
+                    "scan_type": scan_type,
+                    "file": testfile,
+                    "environment": 1,
+                    "version": "1.0.1",
+                    "close_old_findings": close_old_findings,
+            }
 
-        if push_to_jira is not None:
-            payload['push_to_jira'] = push_to_jira
+            if push_to_jira is not None:
+                payload['push_to_jira'] = push_to_jira
 
-        if endpoint_to_add is not None:
-            payload['endpoints'] = [endpoint_to_add]
+            if endpoint_to_add is not None:
+                payload['endpoints'] = [endpoint_to_add]
 
-        if tags is not None:
-            payload['tags'] = tags
+            if tags is not None:
+                payload['tags'] = tags
 
-        if scan_date is not None:
-            payload['scan_date'] = scan_date
+            if scan_date is not None:
+                payload['scan_date'] = scan_date
 
-        if service is not None:
-            payload['service'] = service
+            if service is not None:
+                payload['service'] = service
 
-        return self.import_scan_ui(engagement, payload)
+            result = self.import_scan_ui(engagement, payload)
+
+            return result
 
     def reimport_scan_with_params_ui(self, test_id, filename, scan_type='ZAP Scan', minimum_severity='Low', active=True, verified=False, push_to_jira=None, tags=None, close_old_findings=True, scan_date=None):
         # Mimic old functionality for active/verified to avoid breaking tests
@@ -1847,26 +1838,28 @@ class ImportReimportTestUI(DojoAPITestCase, ImportReimportMixin):
         if not verified:
             verifiedPayload = "force_to_false"
 
-        payload = {
-                "minimum_severity": minimum_severity,
-                "active": activePayload,
-                "verified": verifiedPayload,
-                "scan_type": scan_type,
-                "file": open(get_unit_tests_path() + filename),
-                "version": "1.0.1",
-                "close_old_findings": close_old_findings,
-        }
+        with open(get_unit_tests_path() + filename) as testfile:
+            payload = {
+                    "minimum_severity": minimum_severity,
+                    "active": activePayload,
+                    "verified": verifiedPayload,
+                    "scan_type": scan_type,
+                    "file": testfile,
+                    "version": "1.0.1",
+                    "close_old_findings": close_old_findings,
+            }
 
-        if push_to_jira is not None:
-            payload['push_to_jira'] = push_to_jira
+            if push_to_jira is not None:
+                payload['push_to_jira'] = push_to_jira
 
-        if tags is not None:
-            payload['tags'] = tags
+            if tags is not None:
+                payload['tags'] = tags
 
-        if scan_date is not None:
-            payload['scan_date'] = scan_date
+            if scan_date is not None:
+                payload['scan_date'] = scan_date
 
-        return self.reimport_scan_ui(test_id, payload)
+            result = self.reimport_scan_ui(test_id, payload)
+            return result
 
 # Observations:
 # - When reopening a mitigated finding, almost no fields are updated such as title, description, severity, impact, references, ....

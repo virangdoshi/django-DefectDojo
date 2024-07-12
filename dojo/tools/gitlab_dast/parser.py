@@ -1,10 +1,11 @@
-import json
 import hashlib
+import json
 from datetime import datetime
-from dojo.models import Finding, Endpoint
+
+from dojo.models import Endpoint, Finding
 
 
-class GitlabDastParser(object):
+class GitlabDastParser:
     """
     Import GitLab DAST Report in JSON format
     """
@@ -34,9 +35,7 @@ class GitlabDastParser(object):
             item = self.get_item(node, test, scanner)
 
             item_key = hashlib.sha256(
-                "|".join(
-                    [item.severity, item.title, item.description]
-                ).encode()
+                f"{item.severity}|{item.title}|{item.description}".encode()
             ).hexdigest()
 
             if item_key in items:

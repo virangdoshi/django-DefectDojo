@@ -1,8 +1,10 @@
-from dojo.models import Test, Finding
-from .dojo_test_case import DojoAPITestCase
-from dojo.product.helpers import propagate_tags_on_product_sync
 import logging
 import random
+
+from dojo.models import Finding, Test
+from dojo.product.helpers import propagate_tags_on_product_sync
+
+from .dojo_test_case import DojoAPITestCase
 
 logger = logging.getLogger(__name__)
 
@@ -36,14 +38,14 @@ class TagTests(DojoAPITestCase):
         self.assertEqual(len(tags), len(response.get('tags', None)))
         for tag in tags:
             # logger.debug('looking for tag %s in tag list %s', tag, response['tags'])
-            self.assertTrue(tag in response['tags'])
+            self.assertIn(tag, response['tags'])
 
     def test_finding_filter_tags(self):
         tags = ['tag1', 'tag2']
-        finding_id = self.create_finding_with_tags(tags)
+        self.create_finding_with_tags(tags)
 
         tags2 = ['tag1', 'tag3']
-        finding_id2 = self.create_finding_with_tags(tags2)
+        self.create_finding_with_tags(tags2)
 
         response = self.get_finding_api_filter_tags('tag1')
         self.assertEqual(response['count'], 2)
@@ -69,7 +71,7 @@ class TagTests(DojoAPITestCase):
         self.assertEqual(len(tags_merged), len(response.get('tags')))
         for tag in tags_merged:
             # logger.debug('looking for tag %s in tag list %s', tag, response['tags'])
-            self.assertTrue(tag in response['tags'])
+            self.assertIn(tag, response['tags'])
 
     def test_finding_post_tags_overlap(self):
         # create finding
@@ -83,7 +85,7 @@ class TagTests(DojoAPITestCase):
         self.assertEqual(len(tags_merged), len(response.get('tags')))
         for tag in tags_merged:
             # logger.debug('looking for tag %s in tag list %s', tag, response['tags'])
-            self.assertTrue(tag in response['tags'])
+            self.assertIn(tag, response['tags'])
 
     def test_finding_put_remove_tags(self):
         # create finding
@@ -103,7 +105,7 @@ class TagTests(DojoAPITestCase):
         self.assertEqual(len(tags_merged), len(response.get('tags')))
         for tag in tags_merged:
             # logger.debug('looking for tag %s in tag list %s', tag, response['tags'])
-            self.assertTrue(tag in response['tags'])
+            self.assertIn(tag, response['tags'])
 
     def test_finding_put_remove_tags_all(self):
         # create finding
@@ -123,7 +125,7 @@ class TagTests(DojoAPITestCase):
         self.assertEqual(len(tags_merged), len(response.get('tags')))
         for tag in tags_merged:
             # logger.debug('looking for tag %s in tag list %s', tag, response['tags'])
-            self.assertTrue(tag in response['tags'])
+            self.assertIn(tag, response['tags'])
 
     def test_finding_put_remove_tags_non_existent(self):
         # create finding
@@ -143,7 +145,7 @@ class TagTests(DojoAPITestCase):
         self.assertEqual(len(tags_merged), len(response.get('tags')))
         for tag in tags_merged:
             # logger.debug('looking for tag %s in tag list %s', tag, response['tags'])
-            self.assertTrue(tag in response['tags'])
+            self.assertIn(tag, response['tags'])
 
     def test_finding_patch_remove_tags(self):
         # has same logic as PUT
@@ -160,16 +162,9 @@ class TagTests(DojoAPITestCase):
         finding_id = self.create_finding_with_tags(tags)
         response = self.get_finding_tags_api(finding_id)
 
-        # the old django-tagging library was splitting this tag into 2 tags
-        # with djangotagulous the tag does no longer get split up and we cannot modify tagulous
-        # to keep doing the old behaviour. so this is a small incompatibility, but only for
-        # tags with commas, so should be minor trouble
-        #
-        # self.assertEqual(2, len(response.get('tags')))
-        self.assertEqual(1, len(response.get('tags')))
-        # print("response['tags']:" + str(response['tags']))
-        self.assertTrue('one' in str(response['tags']))
-        self.assertTrue('two' in str(response['tags']))
+        self.assertEqual(2, len(response.get('tags')))
+        self.assertIn('one', str(response['tags']))
+        self.assertIn('two', str(response['tags']))
 
     def test_finding_create_tags_with_commas_quoted(self):
         tags = ['"one,two"']
@@ -181,8 +176,8 @@ class TagTests(DojoAPITestCase):
         for tag in tags:
             logger.debug('looking for tag %s in tag list %s', tag, response['tags'])
             # with django-tagging the quotes were stripped, with tagulous they remain
-            # self.assertTrue(tag.strip('\"') in response['tags'])
-            self.assertTrue(tag in response['tags'])
+            # self.assertIn(tag.strip('\"'), response['tags'])
+            self.assertIn(tag, response['tags'])
 
     def test_finding_create_tags_with_spaces(self):
         tags = ['one two']
@@ -195,8 +190,8 @@ class TagTests(DojoAPITestCase):
         # tags with commas, so should be minor trouble
         # self.assertEqual(2, len(response.get('tags')))
         self.assertEqual(1, len(response.get('tags')))
-        self.assertTrue('one' in str(response['tags']))
-        self.assertTrue('two' in str(response['tags']))
+        self.assertIn('one', str(response['tags']))
+        self.assertIn('two', str(response['tags']))
         # finding.tags: [<Tag: one>, <Tag: two>]
 
     def test_finding_create_tags_with_spaces_quoted(self):
@@ -209,8 +204,8 @@ class TagTests(DojoAPITestCase):
         for tag in tags:
             logger.debug('looking for tag %s in tag list %s', tag, response['tags'])
             # with django-tagging the quotes were stripped, with tagulous they remain
-            # self.assertTrue(tag.strip('\"') in response['tags'])
-            self.assertTrue(tag in response['tags'])
+            # self.assertIn(tag.strip('\"'), response['tags'])
+            self.assertIn(tag, response['tags'])
 
         # finding.tags: <QuerySet [<Tag: one two>]>
 
@@ -222,7 +217,7 @@ class TagTests(DojoAPITestCase):
         self.assertEqual(len(tags), len(response.get('tags', None)))
         for tag in tags:
             # logger.debug('looking for tag %s in tag list %s', tag, response['tags'])
-            self.assertTrue(tag in response['tags'])
+            self.assertIn(tag, response['tags'])
 
     def test_import_and_reimport_with_tags(self):
         tags = ['tag1', 'tag2']
@@ -233,19 +228,19 @@ class TagTests(DojoAPITestCase):
 
         self.assertEqual(len(tags), len(response.get('tags')))
         for tag in tags:
-            self.assertTrue(tag in response['tags'])
+            self.assertIn(tag, response['tags'])
 
         # reimport, do not specify tags: should retain tags
-        reimport = self.reimport_scan_with_params(test_id, self.zap_sample5_filename)
+        self.reimport_scan_with_params(test_id, self.zap_sample5_filename)
         self.assertEqual(len(tags), len(response.get('tags')))
         for tag in tags:
-            self.assertTrue(tag in response['tags'])
+            self.assertIn(tag, response['tags'])
 
         # reimport, specify tags others: currently reimport doesn't do anything with tags param and silently ignores them
-        reimport = self.reimport_scan_with_params(test_id, self.zap_sample5_filename, tags=['tag3', 'tag4'])
+        self.reimport_scan_with_params(test_id, self.zap_sample5_filename, tags=['tag3', 'tag4'])
         self.assertEqual(len(tags), len(response.get('tags')))
         for tag in tags:
-            self.assertTrue(tag in response['tags'])
+            self.assertIn(tag, response['tags'])
 
 
 class InheritedTagsTests(DojoAPITestCase):

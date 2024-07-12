@@ -3,14 +3,12 @@ import os
 import sys
 import unittest
 
+from base_test_class import BaseTestCase, on_exception_html_source_logger, set_suite_settings
+from product_test import ProductTest
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
-
-from base_test_class import (BaseTestCase, on_exception_html_source_logger,
-                             set_suite_settings)
-from product_test import ProductTest
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +22,7 @@ class CloseOldTest(BaseTestCase):
     # --------------------------------------------------------------------------------------------------------
     def setUp(self):
         super().setUp()
-        self.relative_path = dir_path = os.path.dirname(os.path.realpath(__file__))
+        self.relative_path = os.path.dirname(os.path.realpath(__file__))
 
     @on_exception_html_source_logger
     def test_delete_findings(self):
@@ -41,8 +39,8 @@ class CloseOldTest(BaseTestCase):
         driver.find_element(By.CSS_SELECTOR, "i.fa-solid.fa-trash").click()
         try:
             WebDriverWait(driver, 1).until(EC.alert_is_present(),
-                                        'Timed out waiting for finding delete ' +
-                                        'confirmation popup to appear.')
+                                        'Timed out waiting for finding delete '
+                                        + 'confirmation popup to appear.')
             driver.switch_to.alert.accept()
         except TimeoutException:
             self.fail('Confirmation dialogue not shown, cannot delete previous findings')

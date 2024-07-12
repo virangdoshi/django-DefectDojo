@@ -1,20 +1,18 @@
 from abc import ABC, abstractmethod
-from typing import NamedTuple, List
+from typing import List, NamedTuple
 
 from django.db.models import QuerySet
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
-from drf_yasg.utils import swagger_auto_schema
 
 from dojo.api_v2.serializers import RiskAcceptanceSerializer
-from dojo.models import Risk_Acceptance, User, Vulnerability_Id
-from django.utils import timezone
 from dojo.authorization.roles_permissions import Permissions
 from dojo.engagement.queries import get_authorized_engagements
-
+from dojo.models import Risk_Acceptance, User, Vulnerability_Id
 
 AcceptedRisk = NamedTuple('AcceptedRisk', (('vulnerability_id', str), ('justification', str), ('accepted_by', str)))
 
@@ -38,10 +36,6 @@ class AcceptedRisksMixin(ABC):
     def risk_application_model_class(self):
         pass
 
-    @swagger_auto_schema(
-        request_body=AcceptedRiskSerializer(many=True),
-        responses={status.HTTP_201_CREATED: RiskAcceptanceSerializer(many=True)},
-    )
     @extend_schema(
         request=AcceptedRiskSerializer(many=True),
         responses={status.HTTP_201_CREATED: RiskAcceptanceSerializer(many=True)},
@@ -65,10 +59,6 @@ class AcceptedRisksMixin(ABC):
 
 class AcceptedFindingsMixin(ABC):
 
-    @swagger_auto_schema(
-        request_body=AcceptedRiskSerializer(many=True),
-        responses={status.HTTP_201_CREATED: RiskAcceptanceSerializer(many=True)},
-    )
     @extend_schema(
         request=AcceptedRiskSerializer(many=True),
         responses={status.HTTP_201_CREATED: RiskAcceptanceSerializer(many=True)},

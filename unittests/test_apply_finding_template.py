@@ -1,21 +1,16 @@
-import sys
 import datetime
-sys.path.append('..')
-from django.http import Http404
-from dojo.models import Product, Product_Type
-from dojo.models import Engagement
-from dojo.models import Test_Type
-from dojo.models import Test
-from dojo.models import Finding
-from dojo.models import Finding_Template
-from dojo.models import System_Settings
-from dojo.finding import views
-from .dojo_test_case import DojoTestCase
-from django.test.client import RequestFactory
+from unittest import skip
+
 from django.contrib.auth.models import User
 from django.contrib.messages.storage.fallback import FallbackStorage
+from django.http import Http404
+from django.test.client import RequestFactory
 from django.utils import timezone
-from unittest import skip
+
+from dojo.finding import views
+from dojo.models import Engagement, Finding, Finding_Template, Product, Product_Type, System_Settings, Test, Test_Type
+
+from .dojo_test_case import DojoTestCase
 
 
 class FindingMother:
@@ -93,7 +88,7 @@ class FindingTemplateTestUtil:
         rf = RequestFactory()
         get_request = rf.get(path)
         get_request.user = user
-        get_request.session = dict()
+        get_request.session = {}
 
         return get_request
 
@@ -102,7 +97,7 @@ class FindingTemplateTestUtil:
         rf = RequestFactory()
         post_request = rf.post(path, data=data)
         post_request.user = user
-        post_request.session = dict()
+        post_request.session = {}
         messages = FallbackStorage(post_request)
         setattr(post_request, '_messages', messages)
 
@@ -161,7 +156,7 @@ class TestApplyFindingTemplate(DojoTestCase):
         test_mitigation = 'template mitigation'
         test_impact = 'template impact'
 
-        result = self.make_request(True, 1, 1,
+        self.make_request(True, 1, 1,
                                    {'title': test_title,
                                     'cwe': test_cwe,
                                     'severity': test_severity,
@@ -191,11 +186,11 @@ class TestApplyFindingTemplate(DojoTestCase):
 
     def test_apply_template_to_finding_with_illegal_finding_fails(self):
         with self.assertRaises(Exception):
-            result = self.make_request(True, None, 1)
+            self.make_request(True, None, 1)
 
     def test_apply_template_to_finding_with_illegal_template_fails(self):
         with self.assertRaises(Exception):
-            result = self.make_request(True, 1, None)
+            self.make_request(True, 1, None)
 
     def test_apply_template_to_finding_with_no_data_returns_view_success(self):
         result = self.make_request(True, 1, 1, None)

@@ -4,14 +4,12 @@ import sys
 import time
 import unittest
 
+from base_test_class import BaseTestCase, on_exception_html_source_logger, set_suite_settings
+from product_test import ProductTest
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
-
-from base_test_class import (BaseTestCase, on_exception_html_source_logger,
-                             set_suite_settings)
-from product_test import ProductTest
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +22,11 @@ class DedupeTest(BaseTestCase):
     # --------------------------------------------------------------------------------------------------------
     def setUp(self):
         super().setUp()
-        self.relative_path = dir_path = os.path.dirname(os.path.realpath(__file__))
+        self.relative_path = os.path.dirname(os.path.realpath(__file__))
 
     def check_nb_duplicates(self, expected_number_of_duplicates):
         logger.debug("checking duplicates...")
         driver = self.driver
-        retries = 0
         for i in range(0, 18):
             time.sleep(5)  # wait bit for celery dedupe task which can be slow on travis
             self.goto_all_findings_list(driver)
@@ -81,8 +78,8 @@ class DedupeTest(BaseTestCase):
         driver.find_element(By.CSS_SELECTOR, "i.fa-solid.fa-trash").click()
         try:
             WebDriverWait(driver, 1).until(EC.alert_is_present(),
-                                        'Timed out waiting for finding delete ' +
-                                        'confirmation popup to appear.')
+                                        'Timed out waiting for finding delete '
+                                        + 'confirmation popup to appear.')
             driver.switch_to.alert.accept()
         except TimeoutException:
             self.fail('Confirmation dialogue not shown, cannot delete previous findings')
@@ -96,12 +93,11 @@ class DedupeTest(BaseTestCase):
         # check that user was redirect back to url where it came from based on return_url
         self.assertTrue(driver.current_url.endswith('page=1'))
 
-
 # --------------------------------------------------------------------------------------------------------
 # Same scanner deduplication - Deduplication on engagement
 #   Test deduplication for Bandit SAST scanner
 # --------------------------------------------------------------------------------------------------------
-    @on_exception_html_source_logger  # noqa: E301
+    @on_exception_html_source_logger
     def test_add_path_test_suite(self):
         logger.debug("Same scanner deduplication - Deduplication on engagement - static. Creating tests...")
         # Create engagement

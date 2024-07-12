@@ -62,7 +62,7 @@
                             {% if system_settings.enable_github %}
                             <th class="text-center">GitHub</th>
                             {% endif %}
-                            <th class="text-center"> Active (Verified) Findings</th>
+                            <th class="text-center">{% dojo_sort request 'Active (Verified) Findings' 'findings_count' %}</th>
                             <th class="text-center"> Vulnerable Hosts / Endpoints</th>
                             <th> Contact</th>
                             {% comment %} The display field is translated in the function. No need to translate here as well{% endcomment %}
@@ -248,12 +248,8 @@
                                     {% endif %}
                                 </td>
                                 <td class="text-center">
-                                  {% if prod.endpoint_count %}
                                     <a href="{% url 'vulnerable_endpoint_hosts' %}?product={{ prod.id }}"><b>{{ prod.endpoint_host_count }}</b></a> /
                                     <a href="{% url 'vulnerable_endpoints' %}?product={{ prod.id }}"><b>{{ prod.endpoint_count }}</b></a>
-                                    {% else %}
-                                      0
-                                  {% endif %}
                                 </td>
                                 <td>
                                   {% if prod.product_manager %}
