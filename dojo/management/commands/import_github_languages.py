@@ -20,7 +20,7 @@ class Command(BaseCommand):
         logger.info('Started importing languages from GitHub ...')
 
         try:
-            deserialized = json.loads(requests.get('https://raw.githubusercontent.com/ozh/github-colors/master/colors.json').text)
+            deserialized = json.loads(requests.get('https://raw.githubusercontent.com/ozh/github-colors/master/colors.json', timeout=60).text)
         except:
             msg = "Invalid format"
             raise Exception(msg)
