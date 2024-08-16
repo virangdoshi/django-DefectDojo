@@ -3,6 +3,7 @@ import logging
 from lxml import etree
 
 from dojo.tools.sonarqube.soprasteria_helper import SonarQubeSoprasteriaHelper
+import lxml.etree
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class SonarQubeSoprasteriaJSON:
             try:
                 issue_detail = rules[rule_id]
                 parser = etree.HTMLParser()
-                html_desc_as_e_tree = etree.fromstring(issue_detail["htmlDesc"], parser)
+                html_desc_as_e_tree = etree.fromstring(issue_detail["htmlDesc"], parser, parser=lxml.etree.XMLParser(resolve_entities=False))
                 issue_description = SonarQubeSoprasteriaHelper().get_description(html_desc_as_e_tree)
                 logger.debug(issue_description)
                 issue_references = SonarQubeSoprasteriaHelper().get_references(

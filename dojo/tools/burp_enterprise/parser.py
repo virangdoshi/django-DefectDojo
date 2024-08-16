@@ -4,6 +4,7 @@ import re
 from lxml import etree
 
 from dojo.models import Endpoint, Finding
+import lxml.etree
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ class BurpEnterpriseParser:
 
     def get_findings(self, filename, test):
         parser = etree.HTMLParser()
-        tree = etree.parse(filename, parser)
+        tree = etree.parse(filename, parser, parser=lxml.etree.XMLParser(resolve_entities=False))
         if tree:
             return self.get_items(tree, test)
         else:
