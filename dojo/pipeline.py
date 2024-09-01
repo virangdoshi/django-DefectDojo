@@ -2,7 +2,6 @@ import logging
 import re
 
 import gitlab
-import requests
 import social_core.pipeline.user
 from django.conf import settings
 from social_core.backends.azuread_tenant import AzureADTenantOAuth2
@@ -11,6 +10,7 @@ from social_core.backends.google import GoogleOAuth2
 from dojo.authorization.roles_permissions import Permissions, Roles
 from dojo.models import Dojo_Group, Dojo_Group_Member, Product, Product_Member, Product_Type, Role
 from dojo.product.queries import get_authorized_products
+from security import safe_requests
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +83,7 @@ def update_azure_groups(backend, uid, user=None, social=None, *args, **kwargs):
                 request_headers = {'Authorization': 'Bearer ' + token}
                 if is_group_id(group_from_response):
                     logger.debug("detected " + group_from_response + " as groupID and will fetch the displayName from microsoft graph")
-                    group_name_request = requests.get((str(soc.extra_data['resource']) + '/v1.0/groups/' + str(group_from_response) + '?$select=displayName'), headers=request_headers)
+                    group_name_request = safe_requests.get((str(soc.extra_data['resource']) + '/v1.0/groups/' + str(group_from_response) + '?$select=displayName'), headers=request_headers)
                     group_name_request.raise_for_status()
                     group_name_request_json = group_name_request.json()
                     group_name = group_name_request_json['displayName']
