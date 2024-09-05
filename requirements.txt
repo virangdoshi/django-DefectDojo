@@ -32,13 +32,13 @@ Markdown==3.7
 openpyxl==3.1.5
 Pillow==10.4.0  # required by django-imagekit
 psycopg[c]==3.2.1
-cryptography==43.0.0
+cryptography==43.0.1
 python-dateutil==2.9.0.post0
 pytz==2024.1
 redis==5.0.8
 requests==2.32.3
 sqlalchemy==2.0.32  # Required by Celery broker transport
-urllib3==1.26.18
+urllib3==1.26.19
 uWSGI==2.0.26
 vobject==0.9.7
 whitenoise==5.2.0
