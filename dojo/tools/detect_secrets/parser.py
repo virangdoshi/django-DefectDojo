@@ -38,7 +38,7 @@ class DetectSecretsParser:
                 description += "**Type:** " + type + "\n"
 
                 dupe_key = hashlib.sha256(
-                    (type + file + str(line) + hashed_secret).encode("utf-8")
+                    (type + file + str(line) + hashed_secret).encode("utf-8"),
                 ).hexdigest()
 
                 if dupe_key in dupes:
@@ -53,8 +53,8 @@ class DetectSecretsParser:
                         date=find_date,
                         severity="High",
                         verified=is_verified,
-                        active="is_secret" in item
-                        and item["is_secret"] is True
+                        active=("is_secret" in item
+                        and item["is_secret"] is True)
                         or "is_secret" not in item,
                         file_path=file,
                         line=line,

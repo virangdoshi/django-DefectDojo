@@ -3,8 +3,7 @@ from os import path
 
 from dojo.models import Finding, Test
 from dojo.tools.sarif.parser import SarifParser, get_fingerprints_hashes
-
-from ..dojo_test_case import DojoTestCase, get_unit_tests_path
+from unittests.dojo_test_case import DojoTestCase, get_unit_tests_path
 
 
 class TestSarifParser(DojoTestCase):
@@ -19,8 +18,8 @@ class TestSarifParser(DojoTestCase):
     def test_example_report(self):
         with open(
             path.join(
-                get_unit_tests_path() + "/scans/sarif/DefectDojo_django-DefectDojo__2020-12-11_13 42 10__export.sarif"
-            )
+                get_unit_tests_path() + "/scans/sarif/DefectDojo_django-DefectDojo__2020-12-11_13 42 10__export.sarif",
+            ), encoding="utf-8",
         )as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
@@ -30,7 +29,7 @@ class TestSarifParser(DojoTestCase):
 
     def test_suppression_report(self):
         """test report file having different suppression definitions"""
-        with open(path.join(path.dirname(__file__), "../scans/sarif/suppression_test.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/suppression_test.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             for finding in findings:
@@ -42,7 +41,7 @@ class TestSarifParser(DojoTestCase):
                     self.assertEqual(True, finding.active)
 
     def test_example2_report(self):
-        with open(path.join(path.dirname(__file__), "../scans/sarif/appendix_k.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/appendix_k.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             self.assertEqual(1, len(findings))
@@ -70,13 +69,13 @@ add_core(ptr, offset, val);
                 self.common_checks(finding)
 
     def test_example_k1_report(self):
-        with open(path.join(path.dirname(__file__), "../scans/sarif/appendix_k1.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/appendix_k1.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             self.assertEqual(0, len(findings))
 
     def test_example_k2_report(self):
-        with open(path.join(path.dirname(__file__), "../scans/sarif/appendix_k2.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/appendix_k2.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             self.assertEqual(1, len(findings))
@@ -91,7 +90,7 @@ add_core(ptr, offset, val);
                 self.common_checks(finding)
 
     def test_example_k3_report(self):
-        with open(path.join(path.dirname(__file__), "../scans/sarif/appendix_k3.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/appendix_k3.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             self.assertEqual(1, len(findings))
@@ -101,7 +100,7 @@ add_core(ptr, offset, val);
                 self.common_checks(finding)
 
     def test_example_k4_report_mitigation(self):
-        with open(path.join(path.dirname(__file__), "../scans/sarif/appendix_k4.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/appendix_k4.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             self.assertEqual(1, len(findings))
@@ -110,7 +109,7 @@ add_core(ptr, offset, val);
             with self.subTest(i=0):
                 finding = findings[0]
                 self.assertEqual(
-                    'Variable "ptr" was used without being initialized. It was declared [here](0).', finding.title
+                    'Variable "ptr" was used without being initialized. It was declared [here](0).', finding.title,
                 )
                 self.assertEqual("C2001", finding.vuln_id_from_tool)
                 self.assertEqual("collections/list.h", finding.file_path)
@@ -118,7 +117,7 @@ add_core(ptr, offset, val);
 
     def test_example_report_ms(self):
         """Report file come from Microsoft SARIF sdk on GitHub"""
-        with open(path.join(path.dirname(__file__), "../scans/sarif/SuppressionTestCurrent.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/SuppressionTestCurrent.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             self.assertEqual(4, len(findings))
@@ -128,7 +127,7 @@ add_core(ptr, offset, val);
                 self.common_checks(finding)
 
     def test_example_report_semgrep(self):
-        with open(path.join(path.dirname(__file__), "../scans/sarif/semgrepowasp-benchmark-sample.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/semgrepowasp-benchmark-sample.sarif"), encoding="utf-8") as testfile:
             test = Test()
             parser = SarifParser()
             findings = parser.get_findings(testfile, test)
@@ -142,7 +141,7 @@ add_core(ptr, offset, val);
                 self.common_checks(finding)
 
     def test_example_report_scanlift_dependency_check(self):
-        with open(path.join(path.dirname(__file__), "../scans/sarif/dependency_check.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/dependency_check.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             self.assertEqual(13, len(findings))
@@ -165,7 +164,7 @@ add_core(ptr, offset, val);
                 self.common_checks(finding)
 
     def test_example_report_scanlift_bash(self):
-        with open(path.join(path.dirname(__file__), "../scans/sarif/bash-report.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/bash-report.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             self.assertEqual(27, len(findings))
@@ -194,7 +193,7 @@ add_core(ptr, offset, val);
                 self.common_checks(finding)
 
     def test_example_report_taint_python(self):
-        with open(path.join(path.dirname(__file__), "../scans/sarif/taint-python-report.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/taint-python-report.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             self.assertEqual(11, len(findings))
@@ -236,7 +235,7 @@ add_core(ptr, offset, val);
 
     def test_njsscan(self):
         """Generated with opensecurity/njsscan (https://github.com/ajinabraham/njsscan)"""
-        with open(path.join(path.dirname(__file__), "../scans/sarif/njsscan.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/njsscan.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             self.assertEqual(2, len(findings))
@@ -263,7 +262,7 @@ add_core(ptr, offset, val);
 
     def test_dockle(self):
         """Generated with goodwithtech/dockle (https://github.com/goodwithtech/dockle)"""
-        with open(path.join(path.dirname(__file__), "../scans/sarif/dockle_0_3_15.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/dockle_0_3_15.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             self.assertEqual(4, len(findings))
@@ -277,7 +276,7 @@ add_core(ptr, offset, val);
 **Rule short description:** Do not store credential in ENVIRONMENT vars/files"""
                 self.assertEqual(description, finding.description)
                 self.assertEqual(
-                    "https://github.com/goodwithtech/dockle/blob/master/CHECKPOINT.md#CIS-DI-0010", finding.references
+                    "https://github.com/goodwithtech/dockle/blob/master/CHECKPOINT.md#CIS-DI-0010", finding.references,
                 )
             with self.subTest(i=1):
                 finding = findings[1]
@@ -287,7 +286,7 @@ add_core(ptr, offset, val);
 **Rule short description:** Enable Content trust for Docker"""
                 self.assertEqual(description, finding.description)
                 self.assertEqual(
-                    "https://github.com/goodwithtech/dockle/blob/master/CHECKPOINT.md#CIS-DI-0005", finding.references
+                    "https://github.com/goodwithtech/dockle/blob/master/CHECKPOINT.md#CIS-DI-0005", finding.references,
                 )
             with self.subTest(i=2):
                 finding = findings[2]
@@ -297,7 +296,7 @@ add_core(ptr, offset, val);
 **Rule short description:** Add HEALTHCHECK instruction to the container image"""
                 self.assertEqual(description, finding.description)
                 self.assertEqual(
-                    "https://github.com/goodwithtech/dockle/blob/master/CHECKPOINT.md#CIS-DI-0006", finding.references
+                    "https://github.com/goodwithtech/dockle/blob/master/CHECKPOINT.md#CIS-DI-0006", finding.references,
                 )
             with self.subTest(i=3):
                 finding = findings[3]
@@ -307,11 +306,11 @@ add_core(ptr, offset, val);
 **Rule short description:** Confirm safety of setuid/setgid files"""
                 self.assertEqual(description, finding.description)
                 self.assertEqual(
-                    "https://github.com/goodwithtech/dockle/blob/master/CHECKPOINT.md#CIS-DI-0008", finding.references
+                    "https://github.com/goodwithtech/dockle/blob/master/CHECKPOINT.md#CIS-DI-0008", finding.references,
                 )
 
     def test_mobsfscan(self):
-        with open(path.join(path.dirname(__file__), "../scans/sarif/mobsfscan.json")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/mobsfscan.json"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             self.assertEqual(9, len(findings))
@@ -319,7 +318,7 @@ add_core(ptr, offset, val);
                 self.common_checks(finding)
 
     def test_gitleaks(self):
-        with open(path.join(path.dirname(__file__), "../scans/sarif/gitleaks_7.5.0.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/gitleaks_7.5.0.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             self.assertEqual(8, len(findings))
@@ -369,7 +368,7 @@ add_core(ptr, offset, val);
             self.assertEqual(37, finding.line)
 
     def test_flawfinder(self):
-        with open(path.join(path.dirname(__file__), "../scans/sarif/flawfinder.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/flawfinder.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             self.assertEqual(53, len(findings))
@@ -395,7 +394,7 @@ add_core(ptr, offset, val);
                 self.assertEqual(327, finding.cwe)
                 self.assertEqual("FF1048", finding.vuln_id_from_tool)
                 self.assertEqual(
-                    "e6c1ad2b1d96ffc4035ed8df070600566ad240b8ded025dac30620f3fd4aa9fd", finding.unique_id_from_tool
+                    "e6c1ad2b1d96ffc4035ed8df070600566ad240b8ded025dac30620f3fd4aa9fd", finding.unique_id_from_tool,
                 )
                 self.assertEqual("https://cwe.mitre.org/data/definitions/327.html", finding.references)
             with self.subTest(i=20):
@@ -418,7 +417,7 @@ add_core(ptr, offset, val);
                 self.assertEqual(120, finding.cwe)
                 self.assertEqual("FF1004", finding.vuln_id_from_tool)
                 self.assertEqual(
-                    "327fc54b75ab37bbbb31a1b71431aaefa8137ff755acc103685ad5adf88f5dda", finding.unique_id_from_tool
+                    "327fc54b75ab37bbbb31a1b71431aaefa8137ff755acc103685ad5adf88f5dda", finding.unique_id_from_tool,
                 )
                 self.assertEqual("https://cwe.mitre.org/data/definitions/120.html", finding.references)
             with self.subTest(i=52):
@@ -440,12 +439,12 @@ add_core(ptr, offset, val);
                 self.assertEqual(482, finding.line)
                 self.assertEqual("FF1021", finding.vuln_id_from_tool)
                 self.assertEqual(
-                    "ad8408027235170e870e7662751a01386beb2d2ed8beb75dd4ba8e4a70e91d65", finding.unique_id_from_tool
+                    "ad8408027235170e870e7662751a01386beb2d2ed8beb75dd4ba8e4a70e91d65", finding.unique_id_from_tool,
                 )
                 self.assertEqual("https://cwe.mitre.org/data/definitions/120.html", finding.references)
 
     def test_flawfinder_interfacev2(self):
-        with open(path.join(path.dirname(__file__), "../scans/sarif/flawfinder.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/flawfinder.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             tests = parser.get_tests(parser.get_scan_types()[0], testfile)
             self.assertEqual(1, len(tests))
@@ -514,7 +513,7 @@ add_core(ptr, offset, val);
                 self.assertEqual("https://cwe.mitre.org/data/definitions/120.html", finding.references)
 
     def test_appendix_k1_double_interfacev2(self):
-        with open(path.join(path.dirname(__file__), "../scans/sarif/appendix_k1_double.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/appendix_k1_double.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             tests = parser.get_tests(parser.get_scan_types()[0], testfile)
             self.assertEqual(2, len(tests))
@@ -530,7 +529,7 @@ add_core(ptr, offset, val);
                 self.assertEqual(0, len(findings))
 
     def test_codeql_snippet_report(self):
-        with open(path.join(path.dirname(__file__), "../scans/sarif/codeQL-output.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/codeQL-output.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             self.assertEqual(72, len(findings))
@@ -556,7 +555,7 @@ add_core(ptr, offset, val);
                 self.common_checks(finding)
 
     def test_severity_cvss_from_grype(self):
-        with open(path.join(path.dirname(__file__), "../scans/sarif/cxf-3.4.6.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/cxf-3.4.6.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             self.assertEqual(22, len(findings))
@@ -585,14 +584,14 @@ add_core(ptr, offset, val);
         )
 
     def test_tags_from_result_properties(self):
-        with open(path.join(path.dirname(__file__), "../scans/sarif/taint-python-report.sarif")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/taint-python-report.sarif"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             item = findings[0]
             self.assertEqual(["Scan"], item.tags)
 
     def test_severity_in_properties(self):
-        with open(path.join(path.dirname(__file__), "../scans/sarif/issue_10191.json")) as testfile:
+        with open(path.join(path.dirname(__file__), "../scans/sarif/issue_10191.json"), encoding="utf-8") as testfile:
             parser = SarifParser()
             findings = parser.get_findings(testfile, Test())
             self.assertEqual(77, len(findings))

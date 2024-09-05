@@ -32,12 +32,12 @@ class TrustwaveFusionAPIParser:
             item = get_item(node, test)
 
             item_key = hashlib.sha256(
-                f"{item.severity}|{item.title}|{item.description}".encode()
+                f"{item.severity}|{item.title}|{item.description}".encode(),
             ).hexdigest()
 
             if item_key in items:
                 items[item_key].unsaved_endpoints.extend(
-                    item.unsaved_endpoints
+                    item.unsaved_endpoints,
                 )
                 items[item_key].nb_occurences += 1
             else:
@@ -134,7 +134,7 @@ def get_item(vuln, test):
             cpe.get_product()[0] if len(cpe.get_product()) > 0 else ""
         )
 
-        finding.component_name = component_name if component_name else None
+        finding.component_name = component_name or None
         finding.component_version = (
             cpe.get_version()[0] if len(cpe.get_version()) > 0 else None
         )
