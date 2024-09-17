@@ -2029,13 +2029,13 @@ def add_stub_finding(request, tid):
                     "severity": "None",
                     "date": formats.date_format(stub_finding.date, "DATE_FORMAT"),
                 }
-                return HttpResponse(json.dumps(data))
+                return HttpResponse(json.dumps(data), content_type="application/json")
         else:
             if request.headers.get("x-requested-with") == "XMLHttpRequest":
                 data = {
                     "message": "Stub Finding form has error, please revise and try again.",
                 }
-                return HttpResponse(json.dumps(data))
+                return HttpResponse(json.dumps(data), content_type="application/json")
 
             messages.add_message(
                 request,
