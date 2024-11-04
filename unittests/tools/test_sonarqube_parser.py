@@ -8,13 +8,13 @@ class TestSonarQubeParser(DojoTestCase):
     # maxDiff = None
 
     def init(self, reportFilename):
-        my_file_handle = open(reportFilename, encoding="utf-8")
-        product = Product()
-        engagement = Engagement()
-        test = Test()
-        engagement.product = product
-        test.engagement = engagement
-        return my_file_handle, product, engagement, test
+        with open(reportFilename, encoding="utf-8") as my_file_handle:
+            product = Product()
+            engagement = Engagement()
+            test = Test()
+            engagement.product = product
+            test.engagement = engagement
+            return my_file_handle, product, engagement, test
 
     # SonarQube Scan - no finding
     def test_file_name_aggregated_parse_file_with_no_vulnerabilities_has_no_findings(

@@ -12,13 +12,13 @@ class TestCheckmarxParser(DojoTestCase):
     # maxDiff = None
 
     def init(self, reportFilename):
-        my_file_handle = open(reportFilename, encoding="utf-8")
-        product = Product()
-        engagement = Engagement()
-        test = Test()
-        engagement.product = product
-        test.engagement = engagement
-        return my_file_handle, product, engagement, test
+        with open(reportFilename, encoding="utf-8") as my_file_handle:
+            product = Product()
+            engagement = Engagement()
+            test = Test()
+            engagement.product = product
+            test.engagement = engagement
+            return my_file_handle, product, engagement, test
 
     def teardown(self, my_file_handle):
         my_file_handle.close()

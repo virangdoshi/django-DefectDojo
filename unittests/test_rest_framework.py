@@ -1773,19 +1773,18 @@ class ImportScanTest(BaseClass.BaseClassTest):
         self.endpoint_path = "import-scan"
         self.viewname = "importscan"
         self.viewset = ImportScanView
-
-        testfile = open("tests/zap_sample.xml", encoding="utf-8")
-        self.payload = {
-            "minimum_severity": "Low",
-            "active": False,
-            "verified": True,
-            "scan_type": "ZAP Scan",
-            "file": testfile,
-            "engagement": 1,
-            "lead": 2,
-            "tags": ["ci/cd", "api"],
-            "version": "1.0.0",
-        }
+        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+            self.payload = {
+                "minimum_severity": "Low",
+                "active": False,
+                "verified": True,
+                "scan_type": "ZAP Scan",
+                "file": testfile,
+                "engagement": 1,
+                "lead": 2,
+                "tags": ["ci/cd", "api"],
+                "version": "1.0.0",
+            }
         self.test_type = TestType.OBJECT_PERMISSIONS
         self.permission_create = Permissions.Import_Scan_Result
         BaseClass.RESTEndpointTest.__init__(self, *args, **kwargs)

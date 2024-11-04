@@ -155,8 +155,8 @@ def on_exception_log_kwarg(func):
         except Exception:
             logger.info(f"exception occured at url: {self.driver.current_url}")
             logger.info(f"page source: {self.driver.page_source}")
-            f = open("/tmp/selenium_page_source.html", "w", encoding="utf-8")
-            f.writelines(self.driver.page_source)
+            with open("/tmp/selenium_page_source.html", "w", encoding="utf-8") as f:
+                f.writelines(self.driver.page_source)
             # time.sleep(30)
             raise
 
