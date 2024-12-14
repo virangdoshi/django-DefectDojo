@@ -11,6 +11,7 @@ from dojo.models import Finding, Sonarqube_Issue
 from dojo.notifications.helper import create_notification
 
 from .api_client import SonarQubeAPI
+import lxml.etree
 
 logger = logging.getLogger(__name__)
 
@@ -386,7 +387,7 @@ class SonarQubeApiImporter:
     @staticmethod
     def get_references(vuln_details):
         parser = etree.HTMLParser()
-        details = etree.fromstring(vuln_details, parser)
+        details = etree.fromstring(vuln_details, parser, parser=lxml.etree.XMLParser(resolve_entities=False))
 
         rule_references = ""
         if details is not None:
